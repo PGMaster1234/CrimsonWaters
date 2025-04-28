@@ -2,9 +2,8 @@ import pygame
 import math
 import random
 from text import drawText
-from calcs import distance, ang, normalize_angle, draw_arrow, linearGradient, normalize, randomCol, setOpacity
-from shapely.geometry import Polygon, MultiPolygon
-from shapely.ops import unary_union
+from calcs import distance, ang, normalize_angle, draw_arrow, linearGradient, normalize, randomCol
+from territory import Territory
 
 
 class TileHandler:
@@ -190,71 +189,15 @@ class TileHandler:
                 centers = self.shiftCenters(centers)
             for p in points:
                 p[3][3].append(p[4]) # store tile reference
-            self.contiguousTerritories.append([[c[0], c[1]], c[3]] for c in centers)
-
-    def findBoundaryTiles(self, territoryTiles):
-        boundary = []
-        for tile in territoryTiles:
-            for adj in tile.adjacent:
-                if adj not in territoryTiles:
-                    boundary.append(tile)
-                    break
-        for tile in boundary:
-            tile.col = self.cols.light
-
-    @staticmethod
-    def territoryBorders(tiles):
-        # 1) build a Shapely Polygon for each tile
-        polys = []
-        for tile in tiles:
-            # derive the 6 corner points of this hex
-            pts = [(tile.x + tile.size * math.cos(math.pi / 3 * i), tile.y + tile.size * math.sin(math.pi / 3 * i)) for i in range(6)]
-            polys.append(Polygon(pts))
-
-        # 2) union them all
-        merged = unary_union(polys)
-
-        # merged may be a Polygon or a MultiPolygon, so we define a helper to extract boundaries from a single Polygon
-        def extract(polygon):
-            exterior = list(polygon.exterior.coords)
-            interiorsList = [list(ring.coords) for ring in polygon.interiors]
-            return exterior, interiorsList
-
-        # 3) collect all exterior/interior rings
-        exteriors = []
-        interiors = []
-        if isinstance(merged, Polygon):
-            ext, ints = extract(merged)
-            exteriors.append(ext)
-            interiors.extend(ints)
-        elif isinstance(merged, MultiPolygon):
-            for poly in merged.geoms:
-                ext, ints = extract(poly)
-                exteriors.append(ext)
-                interiors.extend(ints)
-        else:
-            # unlikely, but handle
-            raise ValueError(f"unexpected geometry type: {type(merged)}")
-        return exteriors, interiors
+            self.contiguousTerritories.append([Territory([c[0], c[1]], c[3], self.cols) for c in centers])
 
     def draw2InternalScreen(self):
-        # for contiguousTerritoryList in self.contiguousTerritories:
-        #     for territory in contiguousTerritoryList:
-        #         self.findBoundaryTiles(territory[1])
         for tile in self.tiles:
             tile.draw(self.surf, False)
             tile.draw(self.debugOverlay, True)
         for contiguousTerritoryList in self.contiguousTerritories:
             for territory in contiguousTerritoryList:
-
-                exteriors, interiors = self.territoryBorders(territory[1])
-                for border in exteriors:
-                    territoryCol = randomCol('red')
-                    # pygame.draw.polygon(self.transparentSurf, setOpacity(territoryCol, 30), border)
-                    pygame.draw.lines(self.surf, setOpacity(territoryCol, 50), True, border, width=3)
-
-                pygame.draw.circle(self.surf, self.cols.dark, territory[0], 4, 2)
-                pygame.draw.circle(self.debugOverlay, self.cols.dark, territory[0], 4, 2)
+                territory.draw(self.surf, self.transparentSurf, self.debugOverlay)
 
     def draw(self, s, showArrows=False, showDebugOverlay=False, showWaterLand=False):
         s.blit(self.surf, (0, 0))
