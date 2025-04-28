@@ -121,11 +121,11 @@ def shift_hue(color, hue_shift):
 
 def randomCol(weighting=None):
     if weighting == 'red' or weighting == 'r':
-        return [random.randint(127, 255), random.randint(0, 127), random.randint(0, 127)]
+        return [random.randint(191, 255), random.randint(0, 127), random.randint(0, 127)]
     if weighting == 'green' or weighting == 'g':
-        return [random.randint(0, 127), random.randint(127, 255), random.randint(0, 127)]
+        return [random.randint(0, 127), random.randint(191, 255), random.randint(0, 127)]
     if weighting == 'blue' or weighting == 'b':
-        return [random.randint(0, 127), random.randint(0, 127), random.randint(127, 255)]
+        return [random.randint(0, 127), random.randint(0, 127), random.randint(191, 255)]
     return [random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)]
 
 
