@@ -2,15 +2,19 @@ import pygame
 import math
 import random
 from text import drawText
-from calcs import distance, ang, normalize_angle, draw_arrow, linearGradient, normalize, randomCol
+from calcs import distance, ang, normalize_angle, draw_arrow, linearGradient, normalize, randomCol, setOpacity
+from shapely.geometry import Polygon, MultiPolygon
+from shapely.ops import unary_union
 
 
 class TileHandler:
     def __init__(self, width, height, size, cols, waterThreshold=0.51, mountainThreshold=0.51, territorySize=100, font=None):
         self.surf = pygame.Surface((width, height)).convert_alpha()
         self.debugOverlay = pygame.Surface((width, height)).convert_alpha()
+        self.transparentSurf = pygame.Surface((width, height)).convert_alpha()
         self.surf.fill(cols.dark)
         self.debugOverlay.fill(cols.dark)
+        self.transparentSurf.fill((0, 0, 0, 0))
 
         self.size = size
         self.tiles = []
@@ -198,13 +202,57 @@ class TileHandler:
         for tile in boundary:
             tile.col = self.cols.light
 
+    @staticmethod
+    def territoryBorders(tiles):
+        # 1) build a Shapely Polygon for each tile
+        polys = []
+        for tile in tiles:
+            # derive the 6 corner points of this hex
+            pts = [(tile.x + tile.size * math.cos(math.pi / 3 * i), tile.y + tile.size * math.sin(math.pi / 3 * i)) for i in range(6)]
+            polys.append(Polygon(pts))
+
+        # 2) union them all
+        merged = unary_union(polys)
+
+        # merged may be a Polygon or a MultiPolygon, so we define a helper to extract boundaries from a single Polygon
+        def extract(polygon):
+            exterior = list(polygon.exterior.coords)
+            interiorsList = [list(ring.coords) for ring in polygon.interiors]
+            return exterior, interiorsList
+
+        # 3) collect all exterior/interior rings
+        exteriors = []
+        interiors = []
+        if isinstance(merged, Polygon):
+            ext, ints = extract(merged)
+            exteriors.append(ext)
+            interiors.extend(ints)
+        elif isinstance(merged, MultiPolygon):
+            for poly in merged.geoms:
+                ext, ints = extract(poly)
+                exteriors.append(ext)
+                interiors.extend(ints)
+        else:
+            # unlikely, but handle
+            raise ValueError(f"unexpected geometry type: {type(merged)}")
+        return exteriors, interiors
+
     def draw2InternalScreen(self):
+        # for contiguousTerritoryList in self.contiguousTerritories:
+        #     for territory in contiguousTerritoryList:
+        #         self.findBoundaryTiles(territory[1])
         for tile in self.tiles:
             tile.draw(self.surf, False)
             tile.draw(self.debugOverlay, True)
         for contiguousTerritoryList in self.contiguousTerritories:
             for territory in contiguousTerritoryList:
-                self.findBoundaryTiles(territory[1])
+
+                exteriors, interiors = self.territoryBorders(territory[1])
+                for border in exteriors:
+                    territoryCol = randomCol('red')
+                    # pygame.draw.polygon(self.transparentSurf, setOpacity(territoryCol, 30), border)
+                    pygame.draw.lines(self.surf, setOpacity(territoryCol, 50), True, border, width=3)
+
                 pygame.draw.circle(self.surf, self.cols.dark, territory[0], 4, 2)
                 pygame.draw.circle(self.debugOverlay, self.cols.dark, territory[0], 4, 2)
 
@@ -218,6 +266,7 @@ class TileHandler:
         if showWaterLand:
             for tile in self.tiles:
                 tile.showWaterLand(s, self.font)
+        s.blit(self.transparentSurf, (0, 0))
 
 
 class Hex:
@@ -228,7 +277,8 @@ class Hex:
         self.y = y
         self.size = size
         self.col = col
-        self.center = [self.x + self.size / 2, self.y + self.size / 2]
+        self.center = [self.x, self.y]
+        self.hex = [(self.x + self.size * math.cos(math.pi / 3 * angle), self.y + self.size * math.sin(math.pi / 3 * angle)) for angle in range(6)]
         self.adjacent = []
         self.waterLand = random.randint(0, 1)
         self.mountainous = random.randint(0, 1)
@@ -239,8 +289,7 @@ class Hex:
         self.regionCol = None
 
     def draw(self, s, showRegions=False):
-        points = [(self.x + self.size * math.cos(math.pi / 3 * angle), self.y + self.size * math.sin(math.pi / 3 * angle)) for angle in range(6)]
-        pygame.draw.polygon(s, self.regionCol if self.isLand and showRegions else self.col, points)
+        pygame.draw.polygon(s, self.regionCol if self.isLand and showRegions else self.col, self.hex)
 
     def drawArrows(self, s):
         for adj in self.adjacent:
@@ -250,4 +299,4 @@ class Hex:
             draw_arrow(s, (self.x, self.y), (self.x + dist * factor * math.cos(angle), self.y + dist * factor * math.sin(angle)), self.col.debugRed, pygame, 2, 5, 25)
 
     def showWaterLand(self, s, font):
-        drawText(s, self.col.dark, font, self.x - self.size / 2, self.y - self.size / 2, str(round(self.waterLand, 2)))
+        drawText(s, (18, 22, 27), font, self.x - self.size / 2, self.y - self.size / 2, str(round(self.waterLand, 2)))
