@@ -11,7 +11,7 @@ pygame.init()
 screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
 clock = pygame.time.Clock()
 fps = 60
-scaleDownFactor = 2
+scaleDownFactor = 1
 screen_width = int(screen.get_width() / scaleDownFactor)
 screen_height = int(screen.get_height() / scaleDownFactor)
 screen_center = [screen_width / 2, screen_height / 2]
@@ -58,7 +58,7 @@ ShakeCounter = 0
 toggle = True
 click = False
 
-tileSize = 3
+tileSize = 6
 TH = TileHandler(screen_width, screen_height, tileSize, Cols, 0.51, 0.54, 100, font=montserratRegular15)
 
 # ---------------- Main Game Loop
@@ -95,7 +95,7 @@ while running:
         if event.type == pygame.KEYUP:
             pass
 
-    TH.draw(screen2, showArrows=False, showDebugOverlay=False, showWaterLand=False)
+    TH.draw(screen2, mx, my, showArrows=False, showDebugOverlay=False, showWaterLand=False)
 
     # ---------------- Updating Screen
     if toggle:
@@ -106,8 +106,8 @@ while running:
                 string = f"{items[label]}: " + string
             drawText(screenUI, Cols.debugRed, montserratRegularAdaptive, 5, screen_height - (30 + 25 * _) / (scaleDownFactor ** (1 / 1.8)), string, Cols.dark, int(3 / scaleDownFactor) + int(3 / scaleDownFactor) < 1, antiAliasing=False)
         pygame.mouse.set_visible(False)
-        pygame.draw.circle(screenUI, Cols.dark, (mx + 1, my + 1), 2, 1)
-        pygame.draw.circle(screenUI, Cols.light, (mx, my), 2, 1)
+        pygame.draw.circle(screenUI, Cols.dark, (mx + 2, my + 2), 7, 2)
+        pygame.draw.circle(screenUI, Cols.light, (mx, my), 7, 2)
     screen.blit(pygame.transform.scale(screen2, (screen_width * scaleDownFactor, screen_height * scaleDownFactor)), (shake[0], shake[1]))
     screen.blit(pygame.transform.scale(screenT, (screen_width * scaleDownFactor, screen_height * scaleDownFactor)), (shake[0], shake[1]))
     screen.blit(pygame.transform.scale(screenUI, (screen_width * scaleDownFactor, screen_height * scaleDownFactor)), (0, 0))
