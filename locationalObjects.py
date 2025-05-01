@@ -1,7 +1,14 @@
 import pygame
-import math
 import heapq
 import itertools
+import numpy as np
+
+
+# Helper function for NumPy vector normalization
+def normalize_vector_np(v):
+    norm = np.linalg.norm(v)
+    # Use snake_case here as it's a global function, not part of the request scope
+    return v if norm == 0 else v / norm
 
 
 class Resource:
@@ -23,17 +30,11 @@ class Resource:
             self.resourceRate = 5
 
     def draw(self, s):
-        if self.resourceType == 'wood':
-            pygame.draw.polygon(s, (115, 80, 32), self.tile.hex)
-        if self.resourceType == 'stone':
-            pygame.draw.polygon(s, (123, 133, 150), self.tile.hex)
-        if self.resourceType == 'iron':
-            pygame.draw.polygon(s, (106, 85, 125), self.tile.hex)
-        if self.resourceType == 'pine':
-            pygame.draw.polygon(s, (63, 105, 51), self.tile.hex)
-        if self.resourceType == 'amber':
-            pygame.draw.polygon(s, (184, 102, 48), self.tile.hex)
-
+        # Draw resource tile based on type
+        colors = {'wood': (115, 80, 32), 'stone': (123, 133, 150), 'iron': (106, 85, 125), 'pine': (63, 105, 51), 'amber': (184, 102, 48)}
+        color = colors.get(self.resourceType)
+        if color:
+            pygame.draw.polygon(s, color, self.tile.hex)
         # s.blit(self.img, self.tile.center)
 
 
@@ -51,110 +52,136 @@ class Harbor:
     #    build speed can be upgraded
     def __init__(self, tile):
         self.tile = tile
+        self.tradeRoutes = {} # Stores calculated paths {targetHarbor: [tile, tile, ...]}
+
+    def generateAllRoutes(self, otherHarbors, waterTilesInOcean):
+        """
+        Single-source multi-target Dijkstra using NumPy for vector math.
+        Finds the shortest paths through water tiles, adjusting cost based on turns.
+        Uses camelCase internally.
+        """
         self.tradeRoutes = {}
-        # add a counter for tie-breaking in the heap
-        self._heap_counter = itertools.count()
+        # Negative value encourages turns (makes path cost lower). Positive discourages. Zero ignores.
+        turnCostFactor = -0.1
+        counter = itertools.count()  # Tie-breaker for heapq
 
-    def generateAllRoutes(self, other_harbors, waterTilesInOcean):
-        """
-        Single-source multi-target Dijkstra to find the shortest paths through water
-        from this harbor to all other specified harbors within the same ocean.
-        Stores results in self.tradeRoutes.
-        """
-        self.tradeRoutes = {}  # Reset routes for this search
-        counter = itertools.count()  # Tie-breaker for heap queue
+        startWaterNeighbors = {w for w in self.tile.adjacent if w in waterTilesInOcean}
+        if not startWaterNeighbors:
+            return
 
-        # Find water tiles adjacent to this harbor (the starting points)
-        start_water_neighbors = {w for w in self.tile.adjacent if w in waterTilesInOcean}
-        if not start_water_neighbors:
-            # print(f"Debug: Harbor {self.tile.grid_x},{self.tile.grid_y} has no adjacent water.")
-            return  # Cannot pathfind if no water access
-
-        # Map water tiles adjacent to target harbors back to the harbor object
-        target_water_map = {}
-        target_harbor_set = set()  # Track which target harbors we still need to find
-        for h in other_harbors:
-            is_target = False
+        # Map water tiles adjacent to targets back to the target harbor object
+        targetWaterMap = {}
+        targetHarborSet = set()
+        for h in otherHarbors:
+            if h == self: continue
+            isTarget = False
             for w in h.tile.adjacent:
                 if w in waterTilesInOcean:
-                    target_water_map[w] = h  # Map water tile -> target harbor
-                    is_target = True
-            if is_target:
-                target_harbor_set.add(h)  # Add harbor to the set of targets
+                    targetWaterMap[w] = h
+                    isTarget = True
+            if isTarget:
+                targetHarborSet.add(h)
 
-        if not target_harbor_set:
-            # print(f"Debug: No reachable target harbors for {self.tile.grid_x},{self.tile.grid_y}.")
-            return  # No targets to pathfind to
+        if not targetHarborSet:
+            return
 
         # Dijkstra Initialization
-        frontier = []  # Min-heap: (g_score, tie_breaker, current_water_tile)
-        came_from = {}  # {water_tile: previous_water_tile_or_source_harbor_tile}
-        g_score = {w: float('inf') for w in waterTilesInOcean}  # Cost from start
+        frontier = []
+        cameFrom = {} # Stores {tile: predecessor_tile_in_path}
+        gScore = {w: float('inf') for w in waterTilesInOcean} # Stores cost to reach tile
 
-        # Initialize frontier with all starting water neighbors
-        for start_neighbor in start_water_neighbors:
-            g_score[start_neighbor] = 0  # Cost to enter water is 0
-            heapq.heappush(frontier, (0, next(counter), start_neighbor))
-            # Mark that these water tiles came directly from the starting harbor's land tile (conceptual parent)
-            came_from[start_neighbor] = self.tile
+        for startNeighbor in startWaterNeighbors:
+            initialCost = 1.0
+            gScore[startNeighbor] = initialCost
+            cameFrom[startNeighbor] = self.tile # Conceptual start from harbor land tile
+            heapq.heappush(frontier, (initialCost, next(counter), startNeighbor))
 
         # Dijkstra Loop
-        while frontier and target_harbor_set:  # Continue while targets remain
-            g_curr, _, current_water_tile = heapq.heappop(frontier)
+        while frontier and targetHarborSet:
+            gCurr, _, currentWaterTile = heapq.heappop(frontier)
 
-            # Skip if we found a shorter path already to this specific water tile
-            if g_curr > g_score.get(current_water_tile, float('inf')):
-                continue
+            if gCurr > gScore.get(currentWaterTile, float('inf')):
+                continue # Already found a shorter path
 
-            # Check if we reached a water tile adjacent to a target harbor we haven't finished finding
-            if current_water_tile in target_water_map:
-                target_harbor = target_water_map[current_water_tile]
-                if target_harbor in target_harbor_set:  # Check if we still need this target
-                    # --- Path Found to target_harbor ---
+            # Check if a target harbor is reached
+            if currentWaterTile in targetWaterMap:
+                targetHarbor = targetWaterMap[currentWaterTile]
+                if targetHarbor in targetHarborSet:
+                    # Reconstruct path
                     path = []
-                    temp = current_water_tile
-                    # Reconstruct path back to the source harbor's conceptual land tile
-                    while temp != self.tile:  # Stop when we trace back to the land tile
+                    temp = currentWaterTile
+                    while temp != self.tile: # Trace back
                         path.append(temp)
-                        if temp not in came_from:  # Error check for reconstruction
-                            print(f"Error reconstructing path for {target_harbor}")
-                            path = None  # Indicate error
+                        if temp not in cameFrom:
+                            path = None
                             break
-                        temp = came_from[temp]  # Move to the previous tile in the path
+                        prevTemp = cameFrom.get(temp)
+                        if prevTemp == temp:
+                            path = None
+                            break # Avoid infinite loops
+                        temp = prevTemp
 
-                    if path:  # If reconstruction succeeded
-                        # Path is currently water tiles from target adj -> source adj. Reverse it.
-                        self.tradeRoutes[target_harbor] = path[::-1]  # print(f"Found path: {self.tile.grid_x},{self.tile.grid_y} -> {target_harbor.tile.grid_x},{target_harbor.tile.grid_y} len={len(path)}")
+                    if path:
+                        self.tradeRoutes[targetHarbor] = path[::-1] # Store reversed path
 
-                    target_harbor_set.remove(target_harbor)  # Mark this harbor as found
+                    targetHarborSet.remove(targetHarbor)
+                    if not targetHarborSet: break # Optimization: exit if all targets found
 
-            # Explore Neighbors of the current water tile
-            for neighbor in current_water_tile.adjacent:
-                # Must be a valid water tile within the current ocean set for pathfinding
-                if neighbor not in waterTilesInOcean:
-                    continue
+            # Explore Neighbors
+            prevTile = cameFrom.get(currentWaterTile)
+            if prevTile is None: continue
 
-                # Cost to move from current to neighbor (assume cost = 1 for adjacent tiles)
-                tentative_g = g_curr + 1
+            currentCenterNp = np.array(currentWaterTile.center)
+            prevCenterNp = np.array(prevTile.center)
 
-                # If this path to the neighbor is shorter than any previous path found
-                if tentative_g < g_score.get(neighbor, float('inf')):
-                    came_from[neighbor] = current_water_tile  # Record the path
-                    g_score[neighbor] = tentative_g
-                    # Add neighbor to the frontier (priority queue)
-                    heapq.heappush(frontier, (tentative_g, next(counter), neighbor))
+            for neighbor in currentWaterTile.adjacent:
+                if neighbor not in waterTilesInOcean: continue
+
+                neighborCenterNp = np.array(neighbor.center)
+
+                # Calculate Cost, adjusting for turns
+                baseCost = 1.0
+                turnAdjustment = 0.0
+
+                # Apply turn cost adjustment only after the first step
+                if prevTile != self.tile:
+                    vec1 = currentCenterNp - prevCenterNp
+                    vec2 = neighborCenterNp - currentCenterNp
+
+                    normVec1 = normalize_vector_np(vec1)
+                    normVec2 = normalize_vector_np(vec2)
+
+                    if np.any(normVec1) and np.any(normVec2): # Avoid dot product with zero vectors
+                        dot = np.dot(normVec1, normVec2)
+                        dot = np.clip(dot, -1.0, 1.0)
+                        # Adjust cost based on turn angle: factor * (1 - cos(angle))
+                        turnAdjustment = turnCostFactor * (1.0 - dot)
+
+                tentativeG = gCurr + baseCost + turnAdjustment
+
+                # Update path if this route is shorter
+                if tentativeG < gScore.get(neighbor, float('inf')):
+                    cameFrom[neighbor] = currentWaterTile
+                    gScore[neighbor] = tentativeG
+                    heapq.heappush(frontier, (tentativeG, next(counter), neighbor))
 
     @staticmethod
-    def heuristic(a, b):
-        # straight‐line (Euclidean) distance
-        return math.hypot(a.x - b.x, a.y - b.y)
+    def heuristic(a, b): # Parameters a, b kept short as is conventional
+        # A* heuristic (Euclidean distance) - not used in current Dijkstra
+        return np.linalg.norm(np.array(a.center) - np.array(b.center))
 
     def draw(self, s):
+        # Draw the harbor tile itself
         pygame.draw.polygon(s, (255, 0, 0), self.tile.hex)
 
     def drawRoute(self, s, otherHarbor):
-        if len(self.tradeRoutes[otherHarbor]) > 1:
-            pygame.draw.lines(s, (127, 63, 63), False, [tile.center for tile in self.tradeRoutes[otherHarbor]], 3)
+        # Draws a specific trade route line
+        if otherHarbor in self.tradeRoutes:
+            pathTiles = self.tradeRoutes[otherHarbor]
+            if len(pathTiles) > 1:
+                points = [tile.center for tile in pathTiles]
+                # Draw lines with some transparency
+                pygame.draw.lines(s, (127, 63, 63, 180), False, points, 3)
 
 
 class DefensePost:
