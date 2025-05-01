@@ -144,8 +144,6 @@ class Harbor:
                     # Add neighbor to the frontier (priority queue)
                     heapq.heappush(frontier, (tentative_g, next(counter), neighbor))
 
-        # print(f"Finished search for {self.tile.grid_x},{self.tile.grid_y}. Found routes to {len(self.tradeRoutes)} harbors.")
-
     @staticmethod
     def heuristic(a, b):
         # straight‐line (Euclidean) distance
