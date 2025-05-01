@@ -154,7 +154,8 @@ class TileHandler:
                     tile.isMountain = True
                     tile.col = linearGradient([self.cols.mountainBlue, self.cols.darkMountainBlue], normalize(tile.mountainous + random.uniform(-mountainColoringNoise, mountainColoringNoise), mountainBounds[0], mountainBounds[1], True))
         for tile in self.tiles:
-            if any(adj in self.allWaterTiles for adj in tile.adjacent):
+            allWaterTilesSet = set(self.allWaterTiles)
+            if any(adj in allWaterTilesSet for adj in tile.adjacent) and tile not in self.allWaterTiles:
                 self.allCoastalTiles.append(tile)
                 tile.isCoast = True
 
@@ -194,6 +195,8 @@ class TileHandler:
         visited = set()
         regions = []
 
+        tilesSet = set(tiles)
+
         for tile in tiles:
             if tile in visited:
                 continue
@@ -208,7 +211,7 @@ class TileHandler:
                 visited.add(current)
                 region.append(current)
                 for adj in current.adjacent:
-                    if (adj in tiles) and (adj not in visited):
+                    if (adj not in visited) and (adj in tilesSet):
                         stack.append(adj)
             regions.append(region)
         print(f"Found {len(regions)} contiguous regions of sizes {[len(reg) for reg in regions]}")
