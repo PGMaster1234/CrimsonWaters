@@ -131,7 +131,7 @@ class Territory:
         for resource in info.resourceTypes:
             spawnableTiles = info.getSpawnableTiles(resource, self.unusedSpawningTiles)
             count = len(spawnableTiles) * info.spawnRates[resource]
-            numResource = int(count) + int((random.random() < (count % 1)))
+            numResource = int(count) + int((random.random() < (count % 1)) or (int(count) == 0 and resource == 'wood'))
             for _ in range(numResource):
                 if not len(spawnableTiles):
                     return
@@ -140,13 +140,10 @@ class Territory:
                 self.unusedSpawningTiles.remove(sampledTile)
 
     def spawnHarbors(self, spawnRates):
-        for tile in self.tiles:
-            if not tile.isCoast or tile.isMountain:
-                continue
-
-            if random.random() < spawnRates.harborSpawnRate:
-                self.harbors.append(Harbor(tile))
-                break
+        if random.random() < spawnRates.harborSpawnRate * self.size:
+            possibleSpawningLocations = [tile for tile in self.tiles if (tile.isCoast and not tile.isMountain)]
+            if possibleSpawningLocations:
+                self.harbors.append(Harbor(random.choice(possibleSpawningLocations)))
 
     def draw(self, s, debugS):
         pygame.draw.circle(debugS, self.cols.dark, self.centerPos, 5, 2)
