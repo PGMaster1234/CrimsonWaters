@@ -1,12 +1,22 @@
 class ResourceInfo:
-    numResources = 5
+    resourceTypes = ['wood', 'stone', 'iron', 'pine', 'amber']
+    numResources = len(resourceTypes)
 
-    woodSpawnRate = 0.004
-    stoneSpawnRate = 0.01
-    ironSpawnRate = 0.003
-    pineSpawnRate = 0.003
-    amberSpawnRate = 0.02
+    spawnRates = {'wood': 0.008,
+                  'stone': 0.006,
+                  'iron': 0.003,
+                  'pine': 0.005,
+                  'amber': 0.003}
+
+    @staticmethod
+    def getSpawnableTiles(resourceType, tiles):
+        spawnableTiles = {'wood': [t for t in tiles if t.isLand and not t.isMountain],
+                          'stone': [t for t in tiles if t.isLand and not t.isCoast],
+                          'iron': [t for t in tiles if t.isLand and t.isMountain],
+                          'pine': [t for t in tiles if t.isLand and not t.isMountain],
+                          'amber': [t for t in tiles if t.isLand and t.isMountain]}
+        return spawnableTiles[resourceType]
 
 
 class StructureInfo:
-    harborSpawnRate = 0.015
+    harborSpawnRate = 0.005
