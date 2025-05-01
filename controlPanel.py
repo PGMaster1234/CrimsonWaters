@@ -26,4 +26,4 @@ class ResourceInfo:
 
 
 class StructureInfo:
-    harborSpawnRate = 0.0005
+    harborSpawnRate = 0.001

@@ -10,7 +10,13 @@ from locationalObjects import Resource, Harbor
 
 
 class Territory:
-    def __init__(self, centerPos, tiles, allWaterTiles, cols):
+    def __init__(self, screenWidth, screenHeight, centerPos, tiles, allWaterTiles, cols):
+        self.screenWidth, self.screenHeight = screenWidth, screenHeight
+        self.surf = pygame.Surface((self.screenWidth, self.screenHeight)).convert_alpha()
+        self.debugSurf = pygame.Surface((self.screenWidth, self.screenHeight)).convert_alpha()
+        self.surf.fill((0, 0, 0, 0))
+        self.debugSurf.fill((0, 0, 0, 0))
+        self.routeSurfs = []
         self.centerPos = centerPos  # Calculated center from K-means
         self.tiles = tiles  # List of Hex objects belonging to this territory
         self.allWaterTiles = allWaterTiles  # Reference needed for spawning coastal harbors
@@ -145,24 +151,31 @@ class Territory:
             if possibleSpawningLocations:
                 self.harbors.append(Harbor(random.choice(possibleSpawningLocations)))
 
-    def draw(self, s, debugS):
-        pygame.draw.circle(debugS, self.cols.dark, self.centerPos, 5, 2)
+    def drawInternal(self):
+        pygame.draw.circle(self.debugSurf, self.cols.dark, self.centerPos, 5, 2)
         border_col = setOpacity(self.cols.dark, 180)
         for border in self.exteriors:
-            pygame.draw.lines(s, border_col, True, border, width=3)
+            pygame.draw.lines(self.surf, border_col, True, border, width=3)
         for border in self.interiors:
-            pygame.draw.lines(s, border_col, True, border, width=3)
-
-    def drawCurrent(self, s, mx, my):
+            pygame.draw.lines(self.surf, border_col, True, border, width=3)
         for resource in self.containedResources:
-            resource.draw(s)
+            resource.draw(self.surf)
 
         for harbor in self.harbors:
-            harbor.draw(s)
+            harbor.draw(self.surf)
             if harbor in self.reachableHarbors:
+                self.routeSurfs.append(pygame.Surface((self.screenWidth, self.screenHeight)).convert_alpha())
+                self.routeSurfs[-1].fill((0, 0, 0, 0))
                 for otherHarbor in self.reachableHarbors[harbor]:
-                    harbor.drawRoute(s, otherHarbor)
+                    harbor.drawRoute(self.routeSurfs[-1], otherHarbor)
 
+    def draw(self, s, debugS):
+        for harborRouteMap in self.routeSurfs:
+            s.blit(harborRouteMap, (0, 0))
+        s.blit(self.surf, (0, 0))
+        debugS.blit(self.debugSurf, (0, 0))
+
+    def drawCurrent(self, s, mx, my):
         hover = self.polygon.contains(Point(mx, my))
 
         if hover:

@@ -31,7 +31,11 @@ class Resource:
 
     def draw(self, s):
         # Draw resource tile based on type
-        colors = {'wood': (115, 80, 32), 'stone': (123, 133, 150), 'iron': (106, 85, 125), 'pine': (63, 105, 51), 'amber': (184, 102, 48)}
+        colors = {'wood': (115, 80, 32),
+                  'stone': (123, 133, 150),
+                  'iron': (106, 85, 125),
+                  'pine': (63, 105, 51),
+                  'amber': (184, 102, 48)}
         color = colors.get(self.resourceType)
         if color:
             pygame.draw.polygon(s, color, self.tile.hex)
@@ -62,7 +66,7 @@ class Harbor:
         """
         self.tradeRoutes = {}
         # Negative value encourages turns (makes path cost lower). Positive discourages. Zero ignores.
-        turnCostFactor = -0.1
+        turnCostFactor = -0.001
         counter = itertools.count()  # Tie-breaker for heapq
 
         startWaterNeighbors = {w for w in self.tile.adjacent if w in waterTilesInOcean}
@@ -155,7 +159,7 @@ class Harbor:
                         dot = np.dot(normVec1, normVec2)
                         dot = np.clip(dot, -1.0, 1.0)
                         # Adjust cost based on turn angle: factor * (1 - cos(angle))
-                        turnAdjustment = turnCostFactor * (1.0 - dot)
+                        turnAdjustment = turnCostFactor * (1.0 - dot) * int(not (round(gCurr) % 3))
 
                 tentativeG = gCurr + baseCost + turnAdjustment
 
@@ -166,22 +170,19 @@ class Harbor:
                     heapq.heappush(frontier, (tentativeG, next(counter), neighbor))
 
     @staticmethod
-    def heuristic(a, b): # Parameters a, b kept short as is conventional
+    def heuristic(a, b):
         # A* heuristic (Euclidean distance) - not used in current Dijkstra
         return np.linalg.norm(np.array(a.center) - np.array(b.center))
 
     def draw(self, s):
-        # Draw the harbor tile itself
         pygame.draw.polygon(s, (255, 0, 0), self.tile.hex)
 
     def drawRoute(self, s, otherHarbor):
-        # Draws a specific trade route line
         if otherHarbor in self.tradeRoutes:
             pathTiles = self.tradeRoutes[otherHarbor]
             if len(pathTiles) > 1:
                 points = [tile.center for tile in pathTiles]
-                # Draw lines with some transparency
-                pygame.draw.lines(s, (127, 63, 63, 180), False, points, 3)
+                pygame.draw.lines(s, (127, 63, 63), False, points, 3)
 
 
 class DefensePost:

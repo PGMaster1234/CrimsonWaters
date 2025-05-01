@@ -12,6 +12,7 @@ from territory import Territory
 
 class TileHandler:
     def __init__(self, width, height, size, cols, waterThreshold=0.51, mountainThreshold=0.51, territorySize=100, font=None):
+        self.screenWidth, self.screenHeight = width, height
         self.surf = pygame.Surface((width, height)).convert_alpha()
         self.debugOverlay = pygame.Surface((width, height)).convert_alpha()
         self.territorySurf = pygame.Surface((width, height)).convert_alpha()
@@ -271,7 +272,7 @@ class TileHandler:
                     # Use the center calculated by KMeans
                     center_pos = calculated_centers[i].tolist()  # Convert numpy array to list
                     # Create the territory
-                    territory = Territory(center_pos, territory_tiles[i], self.allWaterTiles, self.cols)
+                    territory = Territory(self.screenWidth, self.screenHeight, center_pos, territory_tiles[i], self.allWaterTiles, self.cols)
                     region_territories.append(territory)
 
             if region_territories:
@@ -349,6 +350,7 @@ class TileHandler:
             tile.draw(self.debugOverlay, True)
         for contiguousTerritoryList in self.contiguousTerritories:
             for territory in contiguousTerritoryList:
+                territory.drawInternal()
                 territory.draw(self.surf, self.debugOverlay)
 
     def draw(self, s, mx, my, showArrows=False, showDebugOverlay=False, showWaterLand=False):
