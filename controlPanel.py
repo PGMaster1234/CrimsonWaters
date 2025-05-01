@@ -1,11 +1,18 @@
+class GenerationInfo:
+    waterThreshold = 0.51
+    mountainThreshold = 0.54
+
+    territorySize = 100
+
+
 class ResourceInfo:
     resourceTypes = ['wood', 'stone', 'iron', 'pine', 'amber']
     numResources = len(resourceTypes)
 
     spawnRates = {'wood': 0.008,
                   'stone': 0.006,
-                  'iron': 0.003,
-                  'pine': 0.005,
+                  'iron': 0.006,
+                  'pine': 0.003,
                   'amber': 0.003}
 
     @staticmethod
@@ -19,4 +26,4 @@ class ResourceInfo:
 
 
 class StructureInfo:
-    harborSpawnRate = 0.005
+    harborSpawnRate = 0.0005

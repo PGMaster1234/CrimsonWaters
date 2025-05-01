@@ -4,6 +4,7 @@ import time
 from text import drawText
 from fontDict import fonts
 from generation import TileHandler
+from controlPanel import GenerationInfo
 
 pygame.init()
 
@@ -59,7 +60,7 @@ toggle = True
 click = False
 
 tileSize = 6
-TH = TileHandler(screen_width, screen_height, tileSize, Cols, 0.51, 0.54, 100, font=montserratRegular15)
+TH = TileHandler(screen_width, screen_height, tileSize, Cols, GenerationInfo.waterThreshold, GenerationInfo.mountainThreshold, GenerationInfo.territorySize, font=montserratRegular15)
 
 # ---------------- Main Game Loop
 last_time = time.time()
