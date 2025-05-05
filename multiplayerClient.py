@@ -1,12 +1,6 @@
 # udp_client.py
 import socket
 
-# --- Configuration ---
-# The user running this script MUST know the server's IP address on the local network
-# The server script attempts to print this IP when it starts.
-# Replace "SERVER_IP_ADDRESS" with the actual local IP of the machine running the server
-# Or prompt the user for it.
-
 # Prompt user for server IP
 server_ip_input = input("Enter the server's local IP address (e.g., 192.168.1.5): ")
 SERVER_IP = server_ip_input.strip() if server_ip_input else "127.0.0.1"  # Fallback to localhost

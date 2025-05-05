@@ -1,188 +1,254 @@
-import pygame
 import random
 
+import pygame
+
+from shapely.geometry import Polygon, MultiPolygon, Point
+from shapely.ops import unary_union
+
 from calcs import randomCol, setOpacity
-from shapely.geometry import Polygon, MultiPolygon, MultiPoint, Point
-from shapely.ops import unary_union, snap
-from shapely.validation import make_valid
-from controlPanel import ResourceInfo, StructureInfo
+
+SHAPELY_AVAILABLE = True
+
 from locationalObjects import Resource, Harbor
 
 
 class Territory:
-    def __init__(self, screenWidth, screenHeight, centerPos, tiles, allWaterTiles, cols):
+    def __init__(self, screenWidth, screenHeight, centerPos, tiles, allWaterTiles, cols, resource_info=None, structure_info=None):
         self.screenWidth, self.screenHeight = screenWidth, screenHeight
-        self.surf = pygame.Surface((self.screenWidth, self.screenHeight)).convert_alpha()
-        self.debugSurf = pygame.Surface((self.screenWidth, self.screenHeight)).convert_alpha()
-        self.surf.fill((0, 0, 0, 0))
-        self.debugSurf.fill((0, 0, 0, 0))
-        self.routeSurfs = []
-        self.centerPos = centerPos  # Calculated center from K-means
-        self.tiles = tiles  # List of Hex objects belonging to this territory
-        self.allWaterTiles = allWaterTiles  # Reference needed for spawning coastal harbors
+        self.centerPos = centerPos
+        self.tiles = tiles
+        self.allWaterTiles = allWaterTiles
         self.size = len(self.tiles)
         self.cols = cols
-        self.resourceStorages = [0] * ResourceInfo.numResources  # Inventory placeholder
-        self.containedResources = []  # List of Resource objects within territory
-        self.harbors = []  # List of Harbor objects within territory
-        # This dict maps harbors IN THIS territory to a list of OTHER harbors they can reach.
-        # Populated by TileHandler after pathfinding.
-        self.reachableHarbors = {}  # {harbor_object_in_this_territory: list_of_reachable_other_harbor_objects}
-
+        self.resource_info = resource_info
+        self.structure_info = structure_info
+        num_res = getattr(resource_info, 'numResources', 0)
+        self.resourceStorages = [0] * num_res
+        self.containedResources = []
+        self.harbors = []
+        self.reachableHarbors = {}  # Stores {local_harbor_obj: [reachable_harbor_objs]}
         self.territoryCol = randomCol('r')
+        self.claimed = None  # Placeholder for ownership
+        self.id = -1  # Unique identifier assigned by TileHandler
 
-        # Generate border polygon using Shapely if available
-        self.exteriors, self.interiors, self.polygon = self.territoryBorders(self.tiles)
+        # Surfaces are managed by TileHandler; these are effectively null
+        self.surf = None
+        self.debugSurf = None
 
-        # find tile types
+        self.polygon: Polygon | MultiPolygon | None = None  # Shapely object for geometry checks
+        self.exteriors = []  # List of exterior border coordinate lists
+        self.interiors = []  # List of interior border (hole) coordinate lists
+
+        # Generate borders using Shapely if available
+        if SHAPELY_AVAILABLE:
+            self.exteriors, self.interiors, self.polygon = self.territoryBorders(self.tiles)
+        else:
+            self.exteriors, self.interiors = [], []  # Default if Shapely is missing
+
+        # Categorize tiles within the territory
         self.landTiles = [t for t in self.tiles if t.isLand]
         self.mountainTiles = [t for t in self.tiles if t.isMountain]
         self.coastTiles = [t for t in self.tiles if t.isCoast]
-        self.unusedSpawningTiles = [t for t in self.tiles]
+        self.unusedSpawningTiles = list(self.tiles)  # Tiles available for spawning objects
 
-        self.spawnResources(ResourceInfo)
-        self.spawnHarbors(StructureInfo)
+        # Spawn initial resources and structures
+        if self.resource_info:
+            self.spawnResources(self.resource_info)
+        if self.structure_info:
+            self.spawnHarbors(self.structure_info)
+
+    def prepare_for_pickling(self):
+        """Prepare territory data for saving (serialization)."""
+        self.surf = None
+        self.debugSurf = None
+        self.polygon = None  # Shapely objects cannot be pickled directly
+        self.reachableHarbors = {}  # Rebuilt after loading
+
+    def initialize_graphics_and_external_libs(self):
+        """Initialize graphics-related attributes and regenerate Shapely polygon after loading."""
+        self.surf = None  # Not used by Territory directly
+        self.debugSurf = None  # Not used by Territory directly
+        if SHAPELY_AVAILABLE:
+            # Regenerate the polygon using the loaded tiles
+            _, _, self.polygon = self.territoryBorders(self.tiles)
 
     def territoryBorders(self, tiles):
-        """Generates territory borders using Shapely."""
-        polys = []
-        all_corners_coords_rounded = []
-        PRECISION = 8 # Precision for rounding float coordinates
-
-        if not tiles:
-            print("Warning: No tiles provided to territoryBorders.")
+        """Calculates the exterior and interior borders of the territory using Shapely."""
+        if not SHAPELY_AVAILABLE or not tiles:
             return [], [], None
 
+        polys = []
+        PRECISION = 8  # Precision for rounding float coordinates
         for tile in tiles:
-            # Round float vertices to fixed precision before creating polygon
-            pts_float_rounded = [(round(p[0], PRECISION), round(p[1], PRECISION)) for p in tile.floatHexVertices]
-
-            poly = Polygon(pts_float_rounded)
-
-            if poly.is_valid:
-                polys.append(poly)
-                all_corners_coords_rounded.extend(pts_float_rounded)
-            else:
-                # Attempt to fix invalid polygons
-                fixed_poly = make_valid(poly)
-                if isinstance(fixed_poly, Polygon) and fixed_poly.is_valid:
-                    polys.append(fixed_poly)
-                    all_corners_coords_rounded.extend([(round(p[0], PRECISION), round(p[1], PRECISION)) for p in fixed_poly.exterior.coords])
+            if not hasattr(tile, 'floatHexVertices'):
+                continue
+            # Round vertices to avoid floating point inaccuracies with Shapely
+            pts = [(round(p[0], PRECISION), round(p[1], PRECISION)) for p in tile.floatHexVertices]
+            if len(pts) < 3:  # Need at least 3 points for a polygon
+                continue
+            polys.append(Polygon(pts))
 
         if not polys:
-            print("Warning: No valid polygons to merge for territory.")
-            return [], [], None
+            return [], [], None  # No valid polygons created
 
-        # Merge the tile polygons
+        # Merge all tile polygons into one (potentially multi-)polygon
         merged = unary_union(polys)
-
-        # --- Post-processing merged polygon ---
-        merged = merged.buffer(0) # Clean up boundaries
-
-        # Snap vertices with a very small tolerance
-        snap_tolerance = 1e-9
-        if all_corners_coords_rounded:
-            unique_corners = set(all_corners_coords_rounded)
-            if unique_corners:
-                grid_pts = MultiPoint(list(unique_corners))
-                merged = snap(merged, grid_pts, snap_tolerance)
-
-        # Simplify to remove redundant vertices
-        merged = merged.simplify(0.0, preserve_topology=True)
-
-        # Ensure final polygon is valid
-        if not merged.is_valid:
-            merged = make_valid(merged)
-
-        # Extract coordinate rings for drawing
         return self.extractRings(merged)
 
     @staticmethod
     def extractRings(merged):
-        """Extracts exterior/interior rings (int coords) and the Shapely object."""
-        exteriors, interiors = [], []
-        polygon_obj_for_hover = None
-
+        """Extracts exterior and interior coordinate rings from a Shapely Polygon or MultiPolygon."""
+        ext, inter, poly_obj = [], [], None
         if not merged or merged.is_empty:
-            return [], [], None # Invalid input geometry
+            return [], [], None
 
-        def extract(polygon):
-            """Helper to extract int coords from a polygon's rings."""
-            # Round before int conversion
-            ext = [(int(round(p[0])), int(round(p[1]))) for p in polygon.exterior.coords]
-            ints = [[(int(round(p[0])), int(round(p[1]))) for p in r.coords] for r in polygon.interiors]
-            return ext, ints
+        def _extract(polygon):
+            # Extracts coordinates, rounding to integers for drawing
+            extracted = [(int(round(p[0])), int(round(p[1]))) for p in polygon.exterior.coords]
+            ind = []
+            for r in polygon.interiors:
+                if len(r.coords) > 2:  # Ensure interior ring is valid
+                    ind.append([(int(round(p[0])), int(round(p[1]))) for p in r.coords])
+            return extracted, ind
 
-        # Handle Polygon or MultiPolygon results
         if isinstance(merged, Polygon):
-            if merged.is_valid and merged.exterior:
-                e, i = extract(merged)
-                if e: exteriors.append(e)
-                if i: interiors.extend(i)
-                polygon_obj_for_hover = merged
+            if merged.exterior:
+                e, i = _extract(merged)
+                poly_obj = merged  # Keep the original Shapely object
+                ext.append(e)
+                inter.extend(i)
         elif isinstance(merged, MultiPolygon):
-            valid_polygons = []
+            valid_polys = []
             for poly in merged.geoms:
-                if isinstance(poly, Polygon) and poly.is_valid and poly.exterior:
-                    e, i = extract(poly)
-                    if e: exteriors.append(e)
-                    if i: interiors.extend(i)
-                    valid_polygons.append(poly)
-            if valid_polygons:
-                polygon_obj_for_hover = merged # Store the MultiPolygon itself
+                if isinstance(poly, Polygon) and poly.exterior:
+                    e, i = _extract(poly)
+                    ext.append(e)
+                    inter.extend(i)
+                    valid_polys.append(poly)  # Collect valid Shapely polygons
+            if valid_polys:
+                # Store as MultiPolygon if multiple, otherwise single Polygon
+                poly_obj = MultiPolygon(valid_polys) if len(valid_polys) > 1 else valid_polys[0]
 
-        return exteriors, interiors, polygon_obj_for_hover
+        return ext, inter, poly_obj
 
     def spawnResources(self, info):
-        for resource in info.resourceTypes:
-            spawnableTiles = info.getSpawnableTiles(resource, self.unusedSpawningTiles)
-            count = len(spawnableTiles) * info.spawnRates[resource]
-            numResource = int(count) + int((random.random() < (count % 1)) or (int(count) == 0 and resource == 'wood'))
-            for _ in range(numResource):
-                if not len(spawnableTiles):
-                    return
-                sampledTile = random.choice(self.unusedSpawningTiles)
-                self.containedResources.append(Resource(sampledTile, resource, None))
-                self.unusedSpawningTiles.remove(sampledTile)
+        """Spawns resources within the territory based on configuration."""
+        if not info or not hasattr(info, 'resourceTypes'):
+            return
 
-    def spawnHarbors(self, spawnRates):
-        if random.random() < spawnRates.harborSpawnRate * self.size:
-            possibleSpawningLocations = [tile for tile in self.tiles if (tile.isCoast and not tile.isMountain)]
-            if possibleSpawningLocations:
-                self.harbors.append(Harbor(random.choice(possibleSpawningLocations)))
+        for res_type in getattr(info, 'resourceTypes', []):
+            spawnable_tiles = []
+            spawn_rate = 0.0
+            # Get tiles suitable for this resource type
+            if hasattr(info, 'getSpawnableTiles'):
+                spawnable_tiles = info.getSpawnableTiles(res_type, self.unusedSpawningTiles)
+            # Get the spawn rate for this resource
+            if hasattr(info, 'spawnRates'):
+                spawn_rate = info.spawnRates.get(res_type, 0.0)
 
-    def drawInternal(self):
-        pygame.draw.circle(self.debugSurf, self.cols.dark, self.centerPos, 5, 2)
-        border_col = setOpacity(self.cols.dark, 180)
+            # Calculate number to spawn based on rate and available tiles
+            num_to_spawn = int(len(spawnable_tiles) * spawn_rate + random.random())
+
+            if spawnable_tiles and num_to_spawn > 0:
+                # Ensure we don't try to sample more tiles than available
+                k = min(num_to_spawn, len(spawnable_tiles))
+                try:
+                    # Randomly select tiles for spawning
+                    selected_tiles = random.sample(spawnable_tiles, k)
+                    for tile in selected_tiles:
+                        # Double-check tile is still available before spawning
+                        if tile in self.unusedSpawningTiles:
+                            self.containedResources.append(Resource(tile, res_type, None))  # Add Resource object
+                            self.unusedSpawningTiles.remove(tile)  # Mark tile as used
+                except ValueError:
+                    # random.sample throws ValueError if k > len(spawnable) - should be prevented by min() but handle defensively
+                    pass
+
+    def spawnHarbors(self, info):
+        """Spawns harbors on suitable coastal tiles."""
+        if not info or not hasattr(info, 'harborSpawnRate'):
+            return
+
+        # Identify possible locations: coastal, unused, not mountain
+        possible_tiles = [t for t in self.coastTiles if t in self.unusedSpawningTiles and not t.isMountain]
+        spawn_chance = info.harborSpawnRate * len(possible_tiles)  # Chance increases with more suitable tiles
+
+        # Spawn based on chance if possible tiles exist
+        if random.random() < spawn_chance and possible_tiles:
+            chosen_tile = random.choice(possible_tiles)
+            # Check again if tile is still unused (though unlikely to change here)
+            if chosen_tile in self.unusedSpawningTiles:
+                self.harbors.append(Harbor(chosen_tile))  # Add Harbor object
+                self.unusedSpawningTiles.remove(chosen_tile)  # Mark tile as used
+
+    def update_reachable_harbors(self):
+        """Updates the dictionary mapping local harbors to harbors reachable via trade routes."""
+        self.reachableHarbors.clear()  # Reset the map
+        for local_harbor in self.harbors:
+            # Check if the harbor has established trade routes
+            if hasattr(local_harbor, 'tradeRouteObjects') and local_harbor.tradeRouteObjects:
+                # Map this harbor to a list of harbor objects it can reach
+                self.reachableHarbors[local_harbor] = list(local_harbor.tradeRouteObjects.keys())
+
+    def drawInternal(self, target_surf, target_debug_surf):
+        """Draws static territory elements (borders, resources, harbors) onto TileHandler's surfaces."""
+        if target_surf is None or target_debug_surf is None:
+            # Don't draw if surfaces aren't provided (e.g., during init)
+            return
+
+        # Draw a small circle at the territory's logical center on the debug overlay
+        if hasattr(self.cols, 'dark'):
+            pygame.draw.circle(target_debug_surf, self.cols.dark, self.centerPos, 5, 2)
+
+        # Draw territory borders on the main static surface
+        border_col = setOpacity(self.cols.dark, 180)  # Semi-transparent dark color
+        width = 3  # Border thickness
+
+        # Draw exterior borders
         for border in self.exteriors:
-            pygame.draw.lines(self.surf, border_col, True, border, width=3)
+            if len(border) > 1:  # Need at least 2 points to draw lines
+                pygame.draw.lines(target_surf, border_col, True, border, width=width)  # True = closed loop
+
+        # Draw interior borders (holes)
         for border in self.interiors:
-            pygame.draw.lines(self.surf, border_col, True, border, width=3)
+            if len(border) > 1:
+                pygame.draw.lines(target_surf, border_col, True, border, width=width)
+
+        # Draw static appearance of resources and harbors onto the main surface
+        # Assumes Resource and Harbor classes have their own draw methods
         for resource in self.containedResources:
-            resource.draw(self.surf)
-
+            if hasattr(resource, 'draw'):
+                resource.draw(target_surf)
         for harbor in self.harbors:
-            harbor.draw(self.surf)
-            if harbor in self.reachableHarbors:
-                self.routeSurfs.append(pygame.Surface((self.screenWidth, self.screenHeight)).convert_alpha())
-                self.routeSurfs[-1].fill((0, 0, 0, 0))
-                for otherHarbor in self.reachableHarbors[harbor]:
-                    harbor.drawRoute(self.routeSurfs[-1], otherHarbor)
-
-    def draw(self, s, debugS):
-        for harborRouteMap in self.routeSurfs:
-            s.blit(harborRouteMap, (0, 0))
-        s.blit(self.surf, (0, 0))
-        debugS.blit(self.debugSurf, (0, 0))
+            if hasattr(harbor, 'draw'):
+                harbor.draw(target_surf)
 
     def drawCurrent(self, s, mx, my):
-        hover = self.polygon.contains(Point(mx, my))
+        """Draws dynamic elements (like hover effects) onto the provided surface `s`."""
+        hover = False
+        # Check for hover using Shapely if available
+        if SHAPELY_AVAILABLE and self.polygon:
+            # Create a Shapely Point for the mouse position
+            mouse_point = Point(mx, my)
+            # Check if the territory's polygon contains the mouse point
+            hover = self.polygon.contains(mouse_point)
 
+        # If hovering, draw the highlight effect
         if hover:
-            fill_color = setOpacity(self.territoryCol, 60)
-            line_color = setOpacity(self.territoryCol, 200)
+            fill_color = setOpacity(self.territoryCol, 60)  # Semi-transparent territory color
+            line_color = setOpacity(self.territoryCol, 200)  # More opaque border color
+            width = 4  # Highlight border thickness
+
+            # Draw filled polygon and thicker lines for exterior borders
             for border in self.exteriors:
-                pygame.draw.polygon(s, fill_color, border)
-                pygame.draw.lines(s, line_color, True, border, width=4)
+                if len(border) > 2:  # Need at least 3 points for a polygon
+                    pygame.draw.polygon(s, fill_color, border)
+                if len(border) > 1:
+                    pygame.draw.lines(s, line_color, True, border, width=width)
+
+            # Draw thicker lines for interior borders (holes)
             for border in self.interiors:
-                pygame.draw.lines(s, line_color, True, border, width=4)
+                if len(border) > 1:
+                    pygame.draw.lines(s, line_color, True, border, width=width)
+
+            # Potential location to draw dynamic trade routes on hover  # route_color = setOpacity(self.cols.light, 180)  # for src_harbor, reachable_harbors in self.reachableHarbors.items():  #      for target_harbor in reachable_harbors:  #          if hasattr(src_harbor, 'drawRoute'):  #               src_harbor.drawRoute(s, target_harbor, route_color)
