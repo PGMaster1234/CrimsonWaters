@@ -11,6 +11,9 @@ SHAPELY_AVAILABLE = True
 
 from locationalObjects import Resource, Harbor
 
+from ships import Ship
+from controlPanel import ShipInfo, ResourceInfo
+
 
 class Territory:
     def __init__(self, screenWidth, screenHeight, centerPos, tiles, allWaterTiles, cols, resource_info=None, structure_info=None):
@@ -30,6 +33,8 @@ class Territory:
         self.territoryCol = randomCol('r')
         self.claimed = None  # Placeholder for ownership
         self.id = -1  # Unique identifier assigned by TileHandler
+
+        self.ships = []
 
         # Surfaces are managed by TileHandler; these are effectively null
         self.surf = None
@@ -52,10 +57,8 @@ class Territory:
         self.unusedSpawningTiles = list(self.tiles)  # Tiles available for spawning objects
 
         # Spawn initial resources and structures
-        if self.resource_info:
-            self.spawnResources(self.resource_info)
-        if self.structure_info:
-            self.spawnHarbors(self.structure_info)
+        self.spawnResources(self.resource_info)
+        self.spawnHarbors(self.structure_info)
 
     def prepare_for_pickling(self):
         """Prepare territory data for saving (serialization)."""
@@ -165,30 +168,39 @@ class Territory:
                     pass
 
     def spawnHarbors(self, info):
-        """Spawns harbors on suitable coastal tiles."""
-        if not info or not hasattr(info, 'harborSpawnRate'):
-            return
-
-        # Identify possible locations: coastal, unused, not mountain
         possible_tiles = [t for t in self.coastTiles if t in self.unusedSpawningTiles and not t.isMountain]
-        spawn_chance = info.harborSpawnRate * len(possible_tiles)  # Chance increases with more suitable tiles
+        spawn_chance = info.harborSpawnRate * len(possible_tiles)
 
-        # Spawn based on chance if possible tiles exist
-        if random.random() < spawn_chance and possible_tiles:
-            chosen_tile = random.choice(possible_tiles)
-            # Check again if tile is still unused (though unlikely to change here)
-            if chosen_tile in self.unusedSpawningTiles:
-                self.harbors.append(Harbor(chosen_tile))  # Add Harbor object
-                self.unusedSpawningTiles.remove(chosen_tile)  # Mark tile as used
+        print("Starting coastal search")
+        coastLines = []
+        currentCoastID = 0
+        while possible_tiles:
+            queue = [random.choice(possible_tiles)]
+            coastLines.append([queue[0]])
+            while queue:
+                for adj in queue[0].adjacent:
+                    if adj in possible_tiles:
+                        coastLines[currentCoastID].append(adj)
+                        possible_tiles.remove(adj)
+                        queue.append(adj)
+                queue.pop(0)
+            currentCoastID += 1
+
+        justUsedTiles = []
+        print(f"Found {len(coastLines)} coastlines")
+        for coastLine in coastLines:
+            for oceanID in set([tile.connectedOceanID for tile in coastLine]):
+                correspondingUsableTiles = [t for t in coastLine if (t.connectedOceanID == oceanID and t not in justUsedTiles)]
+                chosenTile = random.choice(correspondingUsableTiles)
+                self.harbors.append(Harbor(chosenTile, (random.random() < spawn_chance)))
+                self.unusedSpawningTiles.remove(chosenTile)
+                justUsedTiles.append(chosenTile)
 
     def update_reachable_harbors(self):
         """Updates the dictionary mapping local harbors to harbors reachable via trade routes."""
         self.reachableHarbors.clear()  # Reset the map
         for local_harbor in self.harbors:
-            # Check if the harbor has established trade routes
-            if hasattr(local_harbor, 'tradeRouteObjects') and local_harbor.tradeRouteObjects:
-                # Map this harbor to a list of harbor objects it can reach
-                self.reachableHarbors[local_harbor] = list(local_harbor.tradeRouteObjects.keys())
+            self.reachableHarbors[local_harbor] = list(local_harbor.tradeRouteObjects.keys())
 
     def drawInternal(self, target_surf, target_debug_surf):
         """Draws static territory elements (borders, resources, harbors) onto TileHandler's surfaces."""
@@ -217,13 +229,11 @@ class Territory:
         # Draw static appearance of resources and harbors onto the main surface
         # Assumes Resource and Harbor classes have their own draw methods
         for resource in self.containedResources:
-            if hasattr(resource, 'draw'):
-                resource.draw(target_surf)
+            resource.draw(target_surf)
         for harbor in self.harbors:
-            if hasattr(harbor, 'draw'):
-                harbor.draw(target_surf)
+            harbor.draw(target_surf)
 
-    def drawCurrent(self, s, mx, my):
+    def drawCurrent(self, s, mx, my, click):
         """Draws dynamic elements (like hover effects) onto the provided surface `s`."""
         hover = False
         # Check for hover using Shapely if available
@@ -251,4 +261,14 @@ class Territory:
                 if len(border) > 1:
                     pygame.draw.lines(s, line_color, True, border, width=width)
 
-            # Potential location to draw dynamic trade routes on hover  # route_color = setOpacity(self.cols.light, 180)  # for src_harbor, reachable_harbors in self.reachableHarbors.items():  #      for target_harbor in reachable_harbors:  #          if hasattr(src_harbor, 'drawRoute'):  #               src_harbor.drawRoute(s, target_harbor, route_color)
+            for src_harbor, reachable_harbors in self.reachableHarbors.items():
+                for target_harbor in reachable_harbors:
+                    src_harbor.drawRoute(s, target_harbor, self.cols.debugRed)
+
+            if click and len(self.ships) == 0:
+                self.ships.append(Ship(self.harbors[0].tile, "fluyt", ShipInfo, ResourceInfo))
+                self.ships[0].beginVoyage(self.harbors[0].tradeRoutesPoints[list(self.harbors[0].tradeRoutesPoints.keys())[0]])
+
+        if len(self.ships) != 0:
+            self.ships[0].draw(s)
+            self.ships[0].move()
