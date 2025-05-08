@@ -1,8 +1,8 @@
 class GenerationInfo:
-    waterThreshold = 0.51
+    waterThreshold = 0.505
     mountainThreshold = 0.54
 
-    tileSize = 6
+    tileSize = 10
 
     territorySize = 100
 
@@ -28,7 +28,7 @@ class ResourceInfo:
 
 
 class StructureInfo:
-    harborSpawnRate = 0.001
+    harborSpawnRate = 0.02
 
 
 class ShipInfo:
@@ -36,7 +36,7 @@ class ShipInfo:
     shipClasses = {'fluyt': 'TradeShip', 'carrack': 'TradeShip', 'cutter': 'Warship', 'corsair': 'Warship', 'longShip': 'LongShip', 'galleon': 'LongShip', }
 
     shipHPs = {'fluyt': 50, 'carrack': 100, 'cutter': 75, 'corsair': 90, 'longShip': 80, 'galleon': 120, }
-    shipMSs = {'fluyt': 6, 'carrack': 4, 'cutter': 8, 'corsair': 7, 'longShip': 5, 'galleon': 3, }
+    shipMSs = {'fluyt': 0.3, 'carrack': 0.2, 'cutter': 0.4, 'corsair': 0.35, 'longShip': 0.25, 'galleon': 0.15, }
     shipVisionRanges = {'fluyt': 12, 'carrack': 10, 'cutter': 8, 'corsair': 9, 'longShip': 11, 'galleon': 9, }
     shipDMGs = {'fluyt': 0, 'carrack': 0, 'cutter': 15, 'corsair': 25, 'longShip': 10, 'galleon': 20, }
     shipAttackRanges = {'fluyt': 0, 'carrack': 0, 'cutter': 3, 'corsair': 4, 'longShip': 2, 'galleon': 3, }
