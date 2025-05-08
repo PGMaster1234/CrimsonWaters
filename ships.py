@@ -1,3 +1,9 @@
+import pygame
+import math
+from calcs import ang, normalize_angle, distance
+from text import drawText
+
+
 class Ship:
     # ships never regen
     # ships can be repaired at harbors for resources (small amounts) proportional to their damage, so it's always cheaper than building a new one
@@ -30,6 +36,37 @@ class Ship:
         self.cargoCapacity = shipInfo.shipStorageCapacities[shipType]
 
         self.currentCargo = {resource: 0 for resource in resourceInfo.resourceTypes}
+
+        self.img = pygame.transform.scale(pygame.image.load("assets/UI/Fluyt.png").convert_alpha(), (40, 40))
+        self.imgDims = [self.img.get_width(), self.img.get_height()]
+
+        self.a = 0
+        self.path = None
+        self.currentInd = None
+        self.pos = None
+
+        self.points = None
+
+        # from fontDict import fonts
+        # self.font =
+
+    def beginVoyage(self, path):
+        self.path = path
+        self.currentInd = 1
+        self.pos = list(path[0])
+
+    def move(self):
+        angDiff = normalize_angle(ang(self.pos, self.path[self.currentInd])) - self.a
+        self.a += ((angDiff + math.pi) % (2 * math.pi) - math.pi) / 5
+        self.pos[0] += math.cos(self.a) * self.currentMS
+        self.pos[1] += math.sin(self.a) * self.currentMS
+
+        if distance(self.pos, self.path[self.currentInd]) < 3:
+            self.currentInd += 1
+
+    def draw(self, s):
+        s.blit(pygame.transform.rotate(self.img, self.a), (self.pos[0] - self.imgDims[0], self.pos[1] - self.imgDims[1]))
+        # drawText(s, (255, 200, 200), )
 
 
 class TradeShip(Ship):
