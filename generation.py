@@ -43,6 +43,8 @@ class Hex:
         self.isMountain = False
         self.isCoast = False
 
+        self.connectedOceanID = -1
+
     def prepare_for_pickling(self):
         # Create adjacent_tile_ids before nullifying adjacent object list
         self.adjacent_tile_ids = [adj.tile_id for adj in self.adjacent if hasattr(adj, 'tile_id')]
@@ -130,6 +132,9 @@ class TileHandler:
         print("Indexing Oceans...")
         self.indexOceans()  # Uses Hex.adjacent object list
 
+        print("Assigning coast land to oceans...")
+        self.assignCoastTiles()
+
         print("Creating territories...")
         self.createTerritories(landRegionsRaw)  # Uses object lists
 
@@ -168,26 +173,20 @@ class TileHandler:
 
         # Convert contiguous territory structure to IDs
         self.contiguousTerritoryIDs = []
-        # Rebuild ID structure from the temporary object structure saved during creation
-        if hasattr(self, '_temp_contiguous_territories_objs'):
-            self.contiguousTerritoryIDs = [[terr.id for terr in terr_list] for terr_list in self._temp_contiguous_territories_objs]
-            del self._temp_contiguous_territories_objs  # Clean up temp list
-        else:
-            print("  Warning: Cannot find temporary territory object structure for ID conversion.")
+
+        self.contiguousTerritoryIDs = [[terr.id for terr in terr_list] for terr_list in self._temp_contiguous_territories_objs]
+        del self._temp_contiguous_territories_objs  # Clean up temp list
 
         # Clean individual tiles (creates adjacent_tile_ids, nullifies adjacent objs)
         for tile in self.tiles:
-            if hasattr(tile, 'prepare_for_pickling'):
-                tile.prepare_for_pickling()
+            tile.prepare_for_pickling()
 
         # Clean territories (nullifies surfaces, etc.)
         for territory in self.all_territories_for_unpickling:  # Use flat list
-            if hasattr(territory, 'prepare_for_pickling'):
-                territory.prepare_for_pickling()
+            territory.prepare_for_pickling()
             # Clean harbors within territories
             for harbor in territory.harbors:
-                if hasattr(harbor, 'prepare_for_pickling'):
-                    harbor.prepare_for_pickling()
+                harbor.prepare_for_pickling()
 
         # Clear large intermediate data structures
         self.oceanTiles = {}
@@ -404,6 +403,7 @@ class TileHandler:
                 tile = queue.popleft()
                 for neighbor in tile.adjacent:  # Uses object list during generation
                     if neighbor in unvisited:
+                        neighbor.connectedOceanID = ocean_id
                         unvisited.remove(neighbor)
                         current_ocean_set.add(neighbor)
                         self._ocean_id_map[neighbor] = ocean_id
@@ -412,7 +412,14 @@ class TileHandler:
                 self.oceanTiles[ocean_id] = current_ocean_set
                 self._ocean_water[ocean_id] = current_ocean_set
                 ocean_id += 1
+
         print(f"  Indexed {len(self.oceanTiles)} distinct water bodies.")
+
+    def assignCoastTiles(self):
+        allWaterTilesSet = set(self.allWaterTiles)
+        for coastTile in self.allCoastalTiles:
+            coastTile.connectedOceanID = max([adjWater.connectedOceanID for adjWater in coastTile.adjacent if adjWater in allWaterTilesSet])
+        print(f"Assigned {len(self.allCoastalTiles)} coastal tiles to their oceans")
 
     @staticmethod
     def findContiguousRegions(tiles_to_check):
@@ -453,17 +460,10 @@ class TileHandler:
             # Ensure n_clusters is at least 1 and not more than the number of samples
             n_clusters = min(max(1, math.ceil(num_tiles / self.territorySize)), num_tiles)
 
-            try:
-                # Use k-means++ initialization and suppress future warning about n_init
-                kmeans = KMeans(n_clusters=n_clusters, random_state=random.randint(0, 10000), n_init='auto', init='k-means++')
-                labels = kmeans.fit_predict(tile_centers)
-                calculated_centers = kmeans.cluster_centers_
-            except ValueError as e:  # Catch cases where k-means might fail (e.g., few points)
-                print(f"  KMeans clustering failed for a region: {e}. Skipping region.")
-                continue  # Skip this region if clustering fails
-            except Exception as e:  # Catch other potential Kmeans errors
-                print(f"  An unexpected error occurred during KMeans: {e}. Skipping region.")
-                continue
+            # Use k-means++ initialization and suppress future warning about n_init
+            kmeans = KMeans(n_clusters=n_clusters, random_state=random.randint(0, 10000), n_init='auto', init='k-means++')
+            labels = kmeans.fit_predict(tile_centers)
+            calculated_centers = kmeans.cluster_centers_
 
             territory_tiles_grouped = [[] for _ in range(n_clusters)]
             for i, tile in enumerate(region):
@@ -544,7 +544,7 @@ class TileHandler:
 
                 # Check if the Harbor object has the pathfinding method
                 if hasattr(src_harbor, 'generateAllRoutes'):
-                    routes = src_harbor.generateAllRoutes(other_harbors, water_set_for_ocean, self.tiles_by_id)
+                    routes = src_harbor.generateAllRoutes(other_harbors, water_set_for_ocean)
                     total_routes_found += routes
                 else:
                     print(f"  Warning: Harbor object (ID {src_harbor.harbor_id}) lacks 'generateAllRoutes' method.")
@@ -582,7 +582,7 @@ class TileHandler:
                     # Pass the TileHandler's surfaces to the territory
                     territory.drawInternal(self.surf, self.debugOverlay)
 
-    def draw(self, s, mx, my, showArrows=False, showDebugOverlay=False, showWaterLand=False):
+    def draw(self, s, mx, my, click, showArrows=False, showDebugOverlay=False, showWaterLand=False):
         """Draws the current map state onto the target surface `s`."""
         if self.surf is None or self.territorySurf is None:
             # Avoid drawing if graphics aren't ready (e.g., before initialization)
@@ -616,8 +616,7 @@ class TileHandler:
             for terr_id in terr_id_list:
                 territory = self.territories_by_id.get(terr_id)
                 # Call territory's method to draw dynamic effects (e.g., hover)
-                if territory and hasattr(territory, 'drawCurrent'):
-                    territory.drawCurrent(self.territorySurf, mx, my)
+                territory.drawCurrent(self.territorySurf, mx, my, click)
 
         # 4. Blit the dynamic canvas (with arrows, text, hover effects) onto the main target surface 's'
         s.blit(self.territorySurf, (0, 0))
