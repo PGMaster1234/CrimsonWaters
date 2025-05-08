@@ -149,7 +149,7 @@ if __name__ == "__main__":
                 if event.key == pygame.K_ESCAPE: running = False
                 if event.key == pygame.K_SPACE: toggle = not toggle
 
-        TH.draw(screen2, mx, my, showArrows=False, showDebugOverlay=False, showWaterLand=False)
+        TH.draw(screen2, mx, my, click, showArrows=False, showDebugOverlay=False, showWaterLand=False)
 
         if toggle:
             fps_val = clock.get_fps()
@@ -158,8 +158,6 @@ if __name__ == "__main__":
             pygame.mouse.set_visible(False)
             pygame.draw.circle(screen2, Cols.dark, (mx + 2, my + 2), 7, 2)
             pygame.draw.circle(screen2, Cols.light, (mx, my), 7, 2)
-        else:
-            pygame.mouse.set_visible(True)
 
         screen.blit(screen2, (0, 0))
         pygame.display.flip()
