@@ -34,6 +34,7 @@ class Territory:
         self.claimed = None  # Placeholder for ownership
         self.id = -1  # Unique identifier assigned by TileHandler
 
+        self.coastlines = []
         self.ships = []
 
         # Surfaces are managed by TileHandler; these are effectively null
@@ -140,16 +141,9 @@ class Territory:
             return
 
         for res_type in getattr(info, 'resourceTypes', []):
-            spawnable_tiles = []
-            spawn_rate = 0.0
-            # Get tiles suitable for this resource type
-            if hasattr(info, 'getSpawnableTiles'):
-                spawnable_tiles = info.getSpawnableTiles(res_type, self.unusedSpawningTiles)
-            # Get the spawn rate for this resource
-            if hasattr(info, 'spawnRates'):
-                spawn_rate = info.spawnRates.get(res_type, 0.0)
+            spawnable_tiles = info.getSpawnableTiles(res_type, self.unusedSpawningTiles)
+            spawn_rate = info.spawnRates.get(res_type, 0.0)
 
-            # Calculate number to spawn based on rate and available tiles
             num_to_spawn = int(len(spawnable_tiles) * spawn_rate + random.random())
 
             if spawnable_tiles and num_to_spawn > 0:
@@ -168,33 +162,30 @@ class Territory:
                     pass
 
     def spawnHarbors(self, info):
-        possible_tiles = [t for t in self.coastTiles if t in self.unusedSpawningTiles and not t.isMountain]
-        spawn_chance = info.harborSpawnRate * len(possible_tiles)
+        possibleTiles = [t for t in self.coastTiles if not t.isMountain]
+        spawnChance = info.harborSpawnRate * len(possibleTiles)
 
-        print("Starting coastal search")
-        coastLines = []
+        self.coastlines = []
         currentCoastID = 0
-        while possible_tiles:
-            queue = [random.choice(possible_tiles)]
-            coastLines.append([queue[0]])
+        while possibleTiles:
+            queue = [random.choice(possibleTiles)]
+            self.coastlines.append([queue[0]])
+
             while queue:
-                for adj in queue[0].adjacent:
-                    if adj in possible_tiles:
-                        coastLines[currentCoastID].append(adj)
-                        possible_tiles.remove(adj)
+                currentTile = queue.pop(0)
+                for adj in currentTile.adjacent:
+                    if adj in possibleTiles:
+                        self.coastlines[currentCoastID].append(adj)
                         queue.append(adj)
-                queue.pop(0)
+
+                possibleTiles = [tile for tile in possibleTiles if tile not in self.coastlines[currentCoastID]]
+
             currentCoastID += 1
 
-        justUsedTiles = []
-        print(f"Found {len(coastLines)} coastlines")
-        for coastLine in coastLines:
-            for oceanID in set([tile.connectedOceanID for tile in coastLine]):
-                correspondingUsableTiles = [t for t in coastLine if (t.connectedOceanID == oceanID and t not in justUsedTiles)]
-                chosenTile = random.choice(correspondingUsableTiles)
-                self.harbors.append(Harbor(chosenTile, (random.random() < spawn_chance)))
-                self.unusedSpawningTiles.remove(chosenTile)
-                justUsedTiles.append(chosenTile)
+        for coastLine in self.coastlines:
+            chosenTile = random.choice(coastLine)
+            self.harbors.append(Harbor(chosenTile, (random.random() < spawnChance)))
+            self.unusedSpawningTiles.remove(chosenTile)
 
     def update_reachable_harbors(self):
         """Updates the dictionary mapping local harbors to harbors reachable via trade routes."""
@@ -233,7 +224,13 @@ class Territory:
         for harbor in self.harbors:
             harbor.draw(target_surf)
 
-    def drawCurrent(self, s, mx, my, click):
+        from fontDict import fonts
+        from text import drawText
+        fontInfo = fonts["Alkhemikal40"]
+        font1 = pygame.font.Font(fontInfo[0], fontInfo[1])
+        drawText(target_surf, (0, 0, 0), font1, self.centerPos[0], self.centerPos[1], str(len(self.coastlines)))
+
+    def drawCurrent(self, s, mx, my, click, debugRoutes=False):
         """Draws dynamic elements (like hover effects) onto the provided surface `s`."""
         hover = False
         # Check for hover using Shapely if available
@@ -263,12 +260,12 @@ class Territory:
 
             for src_harbor, reachable_harbors in self.reachableHarbors.items():
                 for target_harbor in reachable_harbors:
-                    src_harbor.drawRoute(s, target_harbor, self.cols.debugRed)
+                    src_harbor.drawRoute(s, target_harbor, self.cols.debugRed, debugRoutes)
 
             if click and len(self.ships) == 0:
                 self.ships.append(Ship(self.harbors[0].tile, "fluyt", ShipInfo, ResourceInfo))
                 self.ships[0].beginVoyage(self.harbors[0].tradeRoutesPoints[list(self.harbors[0].tradeRoutesPoints.keys())[0]])
 
         if len(self.ships) != 0:
-            self.ships[0].draw(s)
             self.ships[0].move()
+            self.ships[0].draw(s)

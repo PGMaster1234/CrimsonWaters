@@ -349,7 +349,8 @@ class TileHandler:
 
         waterBounds = [min(water_values), max(water_values)] if water_values else [0.0, self.waterThreshold]
         landBounds = [min(land_values), max(land_values)] if land_values else [self.waterThreshold, 1.0]
-        mountainBounds = [min(mountain_values), max(mountain_values)] if mountain_values else [self.mountainThreshold, 1.0]
+        mountainBounds = [min(mountain_values), max(mountain_values)] if (len(mountain_values) > 1) else [self.mountainThreshold, 1.0]
+        print(mountain_values, mountainBounds)
 
         waterColoringNoise = 0.0035
         landColoringNoise = 0.0035
@@ -543,11 +544,8 @@ class TileHandler:
                     continue  # No more pairs for this source harbor
 
                 # Check if the Harbor object has the pathfinding method
-                if hasattr(src_harbor, 'generateAllRoutes'):
-                    routes = src_harbor.generateAllRoutes(other_harbors, water_set_for_ocean)
-                    total_routes_found += routes
-                else:
-                    print(f"  Warning: Harbor object (ID {src_harbor.harbor_id}) lacks 'generateAllRoutes' method.")
+                routes = src_harbor.generateAllRoutes(other_harbors, water_set_for_ocean)
+                total_routes_found += routes
 
         print(f"  Harbor connection complete. Found {total_routes_found} connected harbor pairs.")
         return harbor_id  # Return the next available ID
@@ -582,7 +580,7 @@ class TileHandler:
                     # Pass the TileHandler's surfaces to the territory
                     territory.drawInternal(self.surf, self.debugOverlay)
 
-    def draw(self, s, mx, my, click, showArrows=False, showDebugOverlay=False, showWaterLand=False):
+    def draw(self, s, mx, my, click, showArrows=False, showDebugOverlay=False, showWaterLand=False, showDebugRoutes=False):
         """Draws the current map state onto the target surface `s`."""
         if self.surf is None or self.territorySurf is None:
             # Avoid drawing if graphics aren't ready (e.g., before initialization)
@@ -616,7 +614,7 @@ class TileHandler:
             for terr_id in terr_id_list:
                 territory = self.territories_by_id.get(terr_id)
                 # Call territory's method to draw dynamic effects (e.g., hover)
-                territory.drawCurrent(self.territorySurf, mx, my, click)
+                territory.drawCurrent(self.territorySurf, mx, my, click, showDebugRoutes)
 
         # 4. Blit the dynamic canvas (with arrows, text, hover effects) onto the main target surface 's'
         s.blit(self.territorySurf, (0, 0))

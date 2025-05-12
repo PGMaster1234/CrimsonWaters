@@ -2,10 +2,8 @@ import pygame
 import heapq
 import itertools
 import numpy as np
+from calcs import isAngleNearMultiple, catmullRomCentripetal
 
-
-# Import Hex for type hinting if desired, but avoid circular import dependency if possible
-# from generation import Hex # Careful with circular imports
 
 def normalize_vector_np(v):
     norm = np.linalg.norm(v)
@@ -40,13 +38,17 @@ class DefensePost: pass
 
 
 class Harbor:
-    def __init__(self, tile):
+    def __init__(self, tile, isUsable=False):
         self.tile = tile  # Direct reference to the tile it sits on
         self.harbor_id = -1  # Assigned by TileHandler
         # --- Data stored using IDs for pickling ---
         self.tradeRoutesData = {}  # {target_harbor_id: List[tile_id]}
+        self.tradeRoutesPoints = {}  # {target_harbor_id: List[xi, yi]}
         # --- Data reconstructed after pickling ---
         self.tradeRouteObjects = {}  # {target_Harbor_object: List[Hex_object]}
+        self.isUsable = isUsable
+
+        self.prunedPathPoints = []
 
     def prepare_for_pickling(self):
         """Ensure only ID-based data is kept for pickling."""
@@ -60,23 +62,37 @@ class Harbor:
             target_harbor = harbors_by_id_map.get(target_hid)
             if target_harbor:
                 path_objects = []
+                points = []
                 valid_path = True
                 for tile_id in path_tile_ids:
                     tile_obj = tiles_by_id_map.get(tile_id)
                     if tile_obj:
                         path_objects.append(tile_obj)
+                        points.append(tile_obj.center)
                     else:
-                        # print(f"Warning: Tile ID {tile_id} not found during route reconstruction for Harbor {self.harbor_id}.")
+                        print(f"Warning: Tile ID {tile_id} not found during route reconstruction for Harbor {self.harbor_id}.")
                         valid_path = False
                         break  # Stop reconstructing this path
                 if valid_path:
-                    self.tradeRouteObjects[target_harbor] = path_objects  # else: print(f"Warning: Target Harbor ID {target_hid} not found during route reconstruction for Harbor {self.harbor_id}.")
+                    self.tradeRouteObjects[target_harbor] = path_objects
 
-    def generateAllRoutes(self, other_harbors_in_ocean, waterTilesInOcean, tiles_by_id_map):
+                    # prune path for redundant points
+                    popping = []
+                    self.prunedPathPoints = []
+                    for i in range(len(points)):
+                        if len(points) > i + 2:
+                            if isAngleNearMultiple(points[i], points[i + 2], 60, 1):
+                                popping.append(i + 1)
+                                self.prunedPathPoints.append(points[i + 1])
+                                continue
+                    for pop in reversed(popping):
+                        points.pop(pop)
+                    self.tradeRoutesPoints[target_harbor] = catmullRomCentripetal([self.tile.center] + points + [target_harbor.tile.center], 20)[0::2]
+
+    def generateAllRoutes(self, other_harbors_in_ocean, waterTilesInOcean):
         """
         Finds the shortest paths to other harbors using IDs. Stores results in self.tradeRoutesData
         and targetHarbor.tradeRoutesData. Returns the number of PAIRS connected.
-        Requires access to tiles_by_id_map to convert between objects and IDs.
         """
         routes_found_count = 0
         if not other_harbors_in_ocean: return 0
@@ -113,6 +129,8 @@ class Harbor:
             heapq.heappush(frontier, (initialCost, next(counter), startNeighbor))
 
         targets_remaining = targetHarborIdSet.copy()
+
+        pathLength = {w: 0 for w in waterTilesInOcean}
 
         while frontier and targets_remaining:
             gCurr, _, currentWaterTile = heapq.heappop(frontier)
@@ -185,29 +203,32 @@ class Harbor:
                 if tentativeG < gScore.get(neighbor, float('inf')):
                     cameFrom[neighbor] = currentWaterTile
                     gScore[neighbor] = tentativeG
+
+                    # skip this path, it's too long
+                    pathLength[neighbor] = pathLength[currentWaterTile] + 1
+                    if pathLength[neighbor] > 25:
+                        continue
+                    
                     heapq.heappush(frontier, (tentativeG, next(counter), neighbor))
 
         return routes_found_count
 
     def draw(self, s):
-        if self.tile and hasattr(self.tile, 'hex'):
-            try:
-                pygame.draw.polygon(s, (200, 30, 30), self.tile.hex)
-                pygame.draw.polygon(s, (50, 0, 0), self.tile.hex, 2)
-            except TypeError:
-                if hasattr(self.tile, 'center') and hasattr(self.tile, 'size'):
-                    pygame.draw.circle(s, (200, 30, 30), self.tile.center, self.tile.size * 0.5)
+        pygame.draw.polygon(s, ((200, 30, 30) if self.isUsable else (100, 10, 10)), self.tile.hex)
 
-    def drawRoute(self, s, otherHarbor, color=(127, 63, 63, 180)):
-        """Draws a specific trade route path using the reconstructed object path."""
+    def drawRoute(self, s, otherHarbor, color=(127, 63, 63, 180), debug=False):
         # Use the reconstructed object path map
-        pathObjects = self.tradeRouteObjects.get(otherHarbor)
+        pathObjects = self.tradeRouteObjects[otherHarbor]
         if pathObjects and len(pathObjects) >= 1:
-            # Add start/end harbor tile centers
-            points = [self.tile.center] + [tile.center for tile in pathObjects] + [otherHarbor.tile.center]
+            points = self.tradeRoutesPoints[otherHarbor]
+            draw_color = tuple(color) if len(color) == 4 and (s.get_flags() & pygame.SRCALPHA) else tuple(color[:3])
             if len(points) > 1:
-                try:
-                    draw_color = tuple(color) if len(color) == 4 and (s.get_flags() & pygame.SRCALPHA) else tuple(color[:3])
-                    pygame.draw.lines(s, draw_color, False, points, 2)
-                except (ValueError, TypeError) as e:
-                    print(f"Error drawing route line: {e}")
+                pygame.draw.lines(s, draw_color, False, points, 2)
+            if debug:
+                if len(points) > 1:
+                    for p in points:
+                        pygame.draw.circle(s, (0, 0, 255), p, 3)
+                    pygame.draw.lines(s, (0, 0, 255), False, points, 1)
+                if len(self.prunedPathPoints) > 1:
+                    for p in self.prunedPathPoints:
+                        pygame.draw.circle(s, (0, 255, 0), p, 3)

@@ -4,6 +4,70 @@ import random
 import numpy as np
 
 
+def catmullRomCentripetal(pts, segments=10):
+    if len(pts) < 2:
+        return pts[:]
+    alpha = 0.5
+    # build reflection pads
+    P0 = pts[0]
+    P1 = pts[1]
+    Pn = pts[-1]
+    Pnm1 = pts[-2]
+    pre = (2*P0[0] - P1[0], 2*P0[1] - P1[1])
+    post = (2*Pn[0] - Pnm1[0], 2*Pn[1] - Pnm1[1])
+    P = [pre] + pts + [post]
+
+    def tj(ti, Pi, Pj):
+        dx, dy = Pj[0]-Pi[0], Pj[1]-Pi[1]
+        return ti + (dx*dx + dy*dy)**(alpha/2)
+
+    curve = []
+    for i in range(len(P)-3):
+        P0, P1, P2, P3 = P[i], P[i+1], P[i+2], P[i+3]
+        t0 = 0
+        t1 = tj(t0, P0, P1)
+        t2 = tj(t1, P1, P2)
+        t3 = tj(t2, P2, P3)
+
+        for j in range(segments):
+            t = t1 + (t2 - t1) * j/segments
+
+            # de Casteljau‐style interpolation
+            a1x = (t1 - t)/(t1 - t0)*P0[0] + (t - t0)/(t1 - t0)*P1[0]
+            a1y = (t1 - t)/(t1 - t0)*P0[1] + (t - t0)/(t1 - t0)*P1[1]
+            a2x = (t2 - t)/(t2 - t1)*P1[0] + (t - t1)/(t2 - t1)*P2[0]
+            a2y = (t2 - t)/(t2 - t1)*P1[1] + (t - t1)/(t2 - t1)*P2[1]
+            a3x = (t3 - t)/(t3 - t2)*P2[0] + (t - t2)/(t3 - t2)*P3[0]
+            a3y = (t3 - t)/(t3 - t2)*P2[1] + (t - t2)/(t3 - t2)*P3[1]
+
+            b1x = (t2 - t)/(t2 - t0)*a1x + (t - t0)/(t2 - t0)*a2x
+            b1y = (t2 - t)/(t2 - t0)*a1y + (t - t0)/(t2 - t0)*a2y
+            b2x = (t3 - t)/(t3 - t1)*a2x + (t - t1)/(t3 - t1)*a3x
+            b2y = (t3 - t)/(t3 - t1)*a2y + (t - t1)/(t3 - t1)*a3y
+
+            cx = (t2 - t)/(t2 - t1)*b1x + (t - t1)/(t2 - t1)*b2x
+            cy = (t2 - t)/(t2 - t1)*b1y + (t - t1)/(t2 - t1)*b2y
+
+            curve.append((cx, cy))
+
+    curve.append(pts[-1])
+    return curve
+
+
+def isAngleNearMultiple(p1, p2, multiple=45, buffer=5):
+    if p1 == p2:
+        return False
+    angle = math.degrees(math.atan2(p1[1] - p2[1], p2[0] - p1[0])) % 360
+    return any(abs((angle - m) % 360) <= buffer or abs((angle - m) % 360 - 360) <= buffer for m in range(0, 360, multiple))
+
+
+def blitRotate(pygame, surf, image, pos, angle, rotationOriginRelative2TopLeft=None):
+    if rotationOriginRelative2TopLeft is None: rotationOriginRelative2TopLeft = [image.get_width() / 2] * 2
+    rotated_image = pygame.transform.rotate(image, angle)
+    new_rect = rotated_image.get_rect(center=(pos[0] - rotationOriginRelative2TopLeft[0], pos[1] - rotationOriginRelative2TopLeft[1]))
+    surf.blit(rotated_image, new_rect.topleft)
+
+
 def createRadialGradientSurface(pygame, finalSize=(512, 512), circularSmoothnessSteps=3, starterSize=(3, 3), baseColor=(0, 0, 0, 200), centerColor=(180, 30, 255, 255)):
     """
     Creates a radial gradient surface.

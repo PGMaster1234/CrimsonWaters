@@ -1,6 +1,6 @@
 import pygame
 import math
-from calcs import ang, normalize_angle, distance
+from calcs import ang, normalize_angle, distance, blitRotate
 from text import drawText
 
 
@@ -34,39 +34,62 @@ class Ship:
         self.dmg = shipInfo.shipDMGs[shipType]
         self.range = shipInfo.shipAttackRanges[shipType]
         self.cargoCapacity = shipInfo.shipStorageCapacities[shipType]
+        self.size = shipInfo.shipSizes[shipType]
 
         self.currentCargo = {resource: 0 for resource in resourceInfo.resourceTypes}
 
-        self.img = pygame.transform.scale(pygame.image.load("assets/UI/Fluyt.png").convert_alpha(), (40, 40))
-        self.imgDims = [self.img.get_width(), self.img.get_height()]
+        self.img = pygame.transform.scale(pygame.image.load("assets/ships/decoyShip.png").convert_alpha(), (self.size, self.size))
 
-        self.a = 0
+        self.rect = None
+
+        self.a = None
         self.path = None
         self.currentInd = None
         self.pos = None
 
         self.points = None
 
-        # from fontDict import fonts
-        # self.font =
-
     def beginVoyage(self, path):
         self.path = path
         self.currentInd = 1
         self.pos = list(path[0])
+        self.rect = pygame.rect.Rect(self.pos[0] - self.size / 2, self.pos[1] - self.size / 2, self.size, self.size)
 
     def move(self):
-        angDiff = normalize_angle(ang(self.pos, self.path[self.currentInd])) - self.a
-        self.a += ((angDiff + math.pi) % (2 * math.pi) - math.pi) / 5
-        self.pos[0] += math.cos(self.a) * self.currentMS
-        self.pos[1] += math.sin(self.a) * self.currentMS
+        if self.path is not None:
+            if self.a is None:
+                self.a = normalize_angle(ang(self.pos, self.path[self.currentInd]))
+            else:
+                angDiff = normalize_angle(ang(self.pos, self.path[self.currentInd])) - self.a
+                self.a += ((angDiff + math.pi) % (2 * math.pi) - math.pi) / 15
+            self.pos[0] += math.cos(self.a) * self.currentMS
+            self.pos[1] += math.sin(self.a) * self.currentMS
 
-        if distance(self.pos, self.path[self.currentInd]) < 3:
-            self.currentInd += 1
+            self.rect.x, self.rect.y = self.pos[0] - self.size / 2, self.pos[1] - self.size / 2
 
-    def draw(self, s):
-        s.blit(pygame.transform.rotate(self.img, self.a), (self.pos[0] - self.imgDims[0], self.pos[1] - self.imgDims[1]))
-        # drawText(s, (255, 200, 200), )
+            if distance(self.pos, self.path[self.currentInd]) < self.startingTile.size / 3:
+                if len(self.path) > self.currentInd + 1:
+                    self.currentInd += 1
+                else:
+                    if distance(self.pos, self.path[self.currentInd]) < self.startingTile.size / 5:
+                        self.path = None
+
+    def draw(self, s, debug=False):
+        blitRotate(pygame, s, self.img, self.rect.bottomright, -180 * self.a / math.pi - 90)
+
+        pygame.draw.rect(s, (0, 0, 255), self.rect, 1, int(self.size / 3))
+
+        if debug and self.path is not None:
+            angle = normalize_angle(ang(self.pos, self.path[self.currentInd]))
+            debugRayLength = 50
+            pygame.draw.line(s, (0, 0, 255), self.pos, (self.pos[0] + debugRayLength * math.cos(angle), self.pos[1] + debugRayLength * math.sin(angle)), 3)
+            pygame.draw.line(s, (0, 0, 255), self.pos, (self.pos[0] + debugRayLength * math.cos(self.a), self.pos[1] + debugRayLength * math.sin(self.a)), 3)
+            pygame.draw.circle(s, (0, 0, 255), self.path[self.currentInd], 6)
+
+            from fontDict import fonts
+            font1Info = fonts["Alkhemikal20"]
+            font1 = pygame.font.Font(font1Info[0], font1Info[1])
+            drawText(s, (0, 0, 0), font1, self.pos[0] + 20, self.pos[1] + 20, str(round(-180 * self.a / math.pi - 90, 1)))
 
 
 class TradeShip(Ship):

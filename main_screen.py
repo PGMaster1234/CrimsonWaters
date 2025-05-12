@@ -24,6 +24,7 @@ class Cols:
     dark = [18, 22, 27]
     accentOrange = [155, 110, 83]
     crimson = [94, 32, 32]
+    brightCrimson = [124, 47, 47]
     debugRed = [255, 96, 141]
 
 
@@ -102,7 +103,7 @@ if __name__ == "__main__":
         overlay.fill((0, 10, 10, 200))
         screen.blit(overlay, (0, 0))
         drawText(screen, Cols.light, Alkhemikal80, screen_center[0], screen_center[1] + 50, "Generating map...", Cols.dark, shadowSize=5, justify="center", centeredVertically=True)
-        drawText(screen, Cols.crimson, Alkhemikal200, screen_center[0], screen_center[1] - 50, "Crimson Wakes", Cols.dark, shadowSize=5, justify="center", centeredVertically=True)
+        drawText(screen, Cols.brightCrimson, Alkhemikal200, screen_center[0], screen_center[1] - 50, "Crimson Wakes", Cols.dark, shadowSize=5, justify="center", centeredVertically=True)
         pygame.display.flip()
         clock.tick(fps)
 
@@ -149,7 +150,7 @@ if __name__ == "__main__":
                 if event.key == pygame.K_ESCAPE: running = False
                 if event.key == pygame.K_SPACE: toggle = not toggle
 
-        TH.draw(screen2, mx, my, click, showArrows=False, showDebugOverlay=False, showWaterLand=False)
+        TH.draw(screen2, mx, my, click, showArrows=False, showDebugOverlay=False, showWaterLand=False, showDebugRoutes=False)
 
         if toggle:
             fps_val = clock.get_fps()
