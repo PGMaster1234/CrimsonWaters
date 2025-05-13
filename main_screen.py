@@ -88,7 +88,10 @@ if __name__ == "__main__":
     print(f"Main: Submitting task, requesting worker load font: {font_name_needed_by_worker}")
     future = executor.submit(build_tile_handler_worker, (screen_width, screen_height, GenerationInfo, font_name_needed_by_worker, fonts_definitions, Cols, ResourceInfo, StructureInfo))
 
+    numPeriods = 0
     while not future.done():
+        numPeriods += 3 / fps
+        numPeriods %= 4
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 executor.shutdown(wait=False, cancel_futures=True)
@@ -102,7 +105,7 @@ if __name__ == "__main__":
         overlay = pygame.Surface((screen_width, screen_height), pygame.SRCALPHA)
         overlay.fill((0, 10, 10, 200))
         screen.blit(overlay, (0, 0))
-        drawText(screen, Cols.light, Alkhemikal80, screen_center[0], screen_center[1] + 50, "Generating map...", Cols.dark, shadowSize=5, justify="center", centeredVertically=True)
+        drawText(screen, Cols.light, Alkhemikal80, screen_center[0], screen_center[1] + 50, "Generating map" + ("." * int(numPeriods)), Cols.dark, shadowSize=5, justify="center", centeredVertically=True)
         drawText(screen, Cols.brightCrimson, Alkhemikal200, screen_center[0], screen_center[1] - 50, "Crimson Wakes", Cols.dark, shadowSize=5, justify="center", centeredVertically=True)
         pygame.display.flip()
         clock.tick(fps)
