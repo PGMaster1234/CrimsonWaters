@@ -67,17 +67,15 @@ class Ship:
 
             self.rect.x, self.rect.y = self.pos[0] - self.size / 2, self.pos[1] - self.size / 2
 
-            if distance(self.pos, self.path[self.currentInd]) < self.startingTile.size / 3:
+            if distance(self.pos, self.path[self.currentInd]) < 2 * self.startingTile.size:
                 if len(self.path) > self.currentInd + 1:
                     self.currentInd += 1
                 else:
-                    if distance(self.pos, self.path[self.currentInd]) < self.startingTile.size / 5:
+                    if distance(self.pos, self.path[self.currentInd]) < self.startingTile.size / 2:
                         self.path = None
 
     def draw(self, s, debug=False):
         blitRotate(pygame, s, self.img, self.rect.bottomright, -180 * self.a / math.pi - 90)
-
-        pygame.draw.rect(s, (0, 0, 255), self.rect, 1, int(self.size / 3))
 
         if debug and self.path is not None:
             angle = normalize_angle(ang(self.pos, self.path[self.currentInd]))
@@ -90,6 +88,8 @@ class Ship:
             font1Info = fonts["Alkhemikal20"]
             font1 = pygame.font.Font(font1Info[0], font1Info[1])
             drawText(s, (0, 0, 0), font1, self.pos[0] + 20, self.pos[1] + 20, str(round(-180 * self.a / math.pi - 90, 1)))
+
+            pygame.draw.rect(s, (0, 0, 255), self.rect, 1, int(self.size / 3))
 
 
 class TradeShip(Ship):
