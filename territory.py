@@ -75,6 +75,8 @@ class Territory:
         if SHAPELY_AVAILABLE:
             # Regenerate the polygon using the loaded tiles
             _, _, self.polygon = self.territoryBorders(self.tiles)
+        for resource in self.containedResources:
+            resource.initializeImg()
 
     def territoryBorders(self, tiles):
         """Calculates the exterior and interior borders of the territory using Shapely."""
@@ -137,9 +139,6 @@ class Territory:
 
     def spawnResources(self, info):
         """Spawns resources within the territory based on configuration."""
-        if not info or not hasattr(info, 'resourceTypes'):
-            return
-
         for res_type in getattr(info, 'resourceTypes', []):
             spawnable_tiles = info.getSpawnableTiles(res_type, self.unusedSpawningTiles)
             spawn_rate = info.spawnRates.get(res_type, 0.0)
@@ -155,7 +154,7 @@ class Territory:
                     for tile in selected_tiles:
                         # Double-check tile is still available before spawning
                         if tile in self.unusedSpawningTiles:
-                            self.containedResources.append(Resource(tile, res_type, None))  # Add Resource object
+                            self.containedResources.append(Resource(tile, res_type))  # Add Resource object
                             self.unusedSpawningTiles.remove(tile)  # Mark tile as used
                 except ValueError:
                     # random.sample throws ValueError if k > len(spawnable) - should be prevented by min() but handle defensively
@@ -193,7 +192,7 @@ class Territory:
         for local_harbor in self.harbors:
             self.reachableHarbors[local_harbor] = list(local_harbor.tradeRouteObjects.keys())
 
-    def drawInternal(self, target_surf, target_debug_surf):
+    def drawInternalTerritoryBaseline(self, target_surf, target_debug_surf):
         """Draws static territory elements (borders, resources, harbors) onto TileHandler's surfaces."""
         if target_surf is None or target_debug_surf is None:
             # Don't draw if surfaces aren't provided (e.g., during init)
@@ -203,32 +202,26 @@ class Territory:
         if hasattr(self.cols, 'dark'):
             pygame.draw.circle(target_debug_surf, self.cols.dark, self.centerPos, 5, 2)
 
-        # Draw territory borders on the main static surface
-        border_col = setOpacity(self.cols.dark, 180)  # Semi-transparent dark color
-        width = 3  # Border thickness
-
-        # Draw exterior borders
+        borderCol = setOpacity(self.cols.dark, 180)
+        borderWidth = 3
         for border in self.exteriors:
-            if len(border) > 1:  # Need at least 2 points to draw lines
-                pygame.draw.lines(target_surf, border_col, True, border, width=width)  # True = closed loop
-
-        # Draw interior borders (holes)
+            if len(border) > 1:
+                pygame.draw.lines(target_surf, borderCol, True, border, width=borderWidth)
         for border in self.interiors:
             if len(border) > 1:
-                pygame.draw.lines(target_surf, border_col, True, border, width=width)
-
-        # Draw static appearance of resources and harbors onto the main surface
-        # Assumes Resource and Harbor classes have their own draw methods
-        for resource in self.containedResources:
-            resource.draw(target_surf)
-        for harbor in self.harbors:
-            harbor.draw(target_surf)
+                pygame.draw.lines(target_surf, borderCol, True, border, width=borderWidth)
 
         from fontDict import fonts
         from text import drawText
         fontInfo = fonts["Alkhemikal40"]
         font1 = pygame.font.Font(fontInfo[0], fontInfo[1])
-        drawText(target_surf, (0, 0, 0), font1, self.centerPos[0], self.centerPos[1], str(len(self.coastlines)))
+        drawText(target_debug_surf, (0, 0, 0), font1, self.centerPos[0], self.centerPos[1], str(len(self.coastlines)))
+
+    def drawInternalStructures(self, target_surf):
+        for resource in self.containedResources:
+            resource.draw(target_surf)
+        for harbor in self.harbors:
+            harbor.draw(target_surf)
 
     def drawCurrent(self, s, mx, my, click, debugRoutes=False):
         """Draws dynamic elements (like hover effects) onto the provided surface `s`."""
