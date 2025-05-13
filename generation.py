@@ -350,11 +350,10 @@ class TileHandler:
         waterBounds = [min(water_values), max(water_values)] if water_values else [0.0, self.waterThreshold]
         landBounds = [min(land_values), max(land_values)] if land_values else [self.waterThreshold, 1.0]
         mountainBounds = [min(mountain_values), max(mountain_values)] if (len(mountain_values) > 1) else [self.mountainThreshold, 1.0]
-        print(mountain_values, mountainBounds)
 
         waterColoringNoise = 0.0035
-        landColoringNoise = 0.0035
-        mountainColoringNoise = 0.005
+        landColoringNoise = 0.004
+        mountainColoringNoise = 0.007
 
         # Assign Colors and populate type lists
         self.allWaterTiles = []
@@ -576,9 +575,10 @@ class TileHandler:
         for terr_id_list in self.contiguousTerritoryIDs:  # Iterate using the ID structure
             for terr_id in terr_id_list:
                 territory = self.territories_by_id.get(terr_id)  # Get object via ID
-                if territory and hasattr(territory, 'drawInternal'):
-                    # Pass the TileHandler's surfaces to the territory
-                    territory.drawInternal(self.surf, self.debugOverlay)
+                territory.drawInternalTerritoryBaseline(self.surf, self.debugOverlay)
+            for terr_id in terr_id_list:
+                territory = self.territories_by_id.get(terr_id)  # Get object via ID
+                territory.drawInternalStructures(self.surf)
 
     def draw(self, s, mx, my, click, showArrows=False, showDebugOverlay=False, showWaterLand=False, showDebugRoutes=False):
         """Draws the current map state onto the target surface `s`."""

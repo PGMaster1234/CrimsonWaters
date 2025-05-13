@@ -1,6 +1,6 @@
 class GenerationInfo:
     waterThreshold = 0.505
-    mountainThreshold = 0.54
+    mountainThreshold = 0.52
 
     tileSize = 6
 
@@ -11,11 +11,11 @@ class ResourceInfo:
     resourceTypes = ['wood', 'stone', 'iron', 'pine', 'amber']
     numResources = len(resourceTypes)
 
-    spawnRates = {'wood': 0.008,
-                  'stone': 0.006,
-                  'iron': 0.006,
-                  'pine': 0.003,
-                  'amber': 0.003}
+    spawnRates = {'wood': 0.018,
+                  'stone': 0.012,
+                  'iron': 0.02,
+                  'pine': 0.002,
+                  'amber': 0.005}
 
     @staticmethod
     def getSpawnableTiles(resourceType, tiles):

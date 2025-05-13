@@ -2,6 +2,7 @@ import pygame
 import heapq
 import itertools
 import numpy as np
+import os
 from calcs import isAngleNearMultiple, catmullRomCentripetal
 
 
@@ -11,24 +12,23 @@ def normalize_vector_np(v):
 
 
 class Resource:
-    def __init__(self, tile, resourceType, img):
-        self.tile = tile  # Keep direct tile reference for location
+    def __init__(self, tile, resourceType):
+        self.tile = tile
         self.resourceType = resourceType
-        self.img = img
         self.resourceRate = 0
-        if self.resourceType == 'wood': self.resourceRate = 5  # Example rate
+        self.img = None
+        self.imgDims = None
+        if self.resourceType == 'wood': self.resourceRate = 5
+
+    def initializeImg(self):
+        filename = f"assets/structures/{self.resourceType}Icon.png"
+        if os.path.exists(filename):
+            imgScalar = 5
+            self.img = pygame.transform.scale(pygame.image.load(filename).convert_alpha(), [self.tile.size * imgScalar] * 2)
+            self.imgDims = self.img.get_width(), self.img.get_height()
 
     def draw(self, s):
-        colors = {'wood': (115, 80, 32), 'stone': (123, 133, 150), 'iron': (106, 85, 125), 'pine': (63, 105, 51), 'amber': (184, 102, 48)}
-        color = colors.get(self.resourceType)
-        if color and self.tile and hasattr(self.tile, 'hex'):  # Check tile and hex exist
-            try:
-                pygame.draw.polygon(s, color, self.tile.hex)
-            except TypeError:
-                if hasattr(self.tile, 'center') and hasattr(self.tile, 'size'):
-                    pygame.draw.circle(s, color, self.tile.center, self.tile.size * 0.4)
-
-    # No pickling prep needed if it only holds reference to one tile
+        s.blit(self.img, (self.tile.x - self.imgDims[0] / 2, self.tile.y - self.imgDims[1] / 2))
 
 
 class LightHouse: pass
@@ -206,7 +206,7 @@ class Harbor:
 
                     # skip this path, it's too long
                     pathLength[neighbor] = pathLength[currentWaterTile] + 1
-                    if pathLength[neighbor] > 25:
+                    if pathLength[neighbor] > 20:
                         continue
                     
                     heapq.heappush(frontier, (tentativeG, next(counter), neighbor))
