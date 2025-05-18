@@ -7,6 +7,7 @@ import os
 from text import drawText
 from fontDict import fonts as fonts_definitions
 from controlPanel import GenerationInfo, ResourceInfo, StructureInfo
+from player import Player
 
 
 class Cols:
@@ -25,6 +26,10 @@ class Cols:
     accentOrange = [155, 110, 83]
     crimson = [94, 32, 32]
     brightCrimson = [124, 47, 47]
+    cloudLight = [110, 125, 119]
+    cloudMedium = [64, 87, 93]
+    cloudDark = [25, 26, 43]
+
     debugRed = [255, 96, 141]
 
 
@@ -59,8 +64,9 @@ if __name__ == "__main__":
     screen_width, screen_height = screen.get_width(), screen.get_height()
     screen_center = [screen_width / 2, screen_height / 2]
     screen2 = pygame.Surface((screen_width, screen_height)).convert_alpha()
+    screenUI = pygame.Surface((screen_width, screen_height)).convert_alpha()
 
-    # Load fonts (Keep as is)
+    # Load fonts
     loaded_fonts = {}
     print(f"Main: Loading fonts based on {len(fonts_definitions)} definitions...")
     for name, (path, size) in fonts_definitions.items():
@@ -75,6 +81,7 @@ if __name__ == "__main__":
     Alkhemikal30 = loaded_fonts.get('Alkhemikal30')
     Alkhemikal50 = loaded_fonts.get('Alkhemikal50')
     Alkhemikal80 = loaded_fonts.get('Alkhemikal80')
+    Alkhemikal150 = loaded_fonts.get('Alkhemikal150')
     Alkhemikal200 = loaded_fonts.get('Alkhemikal200')
 
     try:
@@ -130,19 +137,24 @@ if __name__ == "__main__":
             pygame.quit()
             sys.exit()
 
-    # Game loop variables (Keep as is)
+    # Game loop variables
     oscillating_random_thing = 0
     ShakeCounter = 0
     toggle = True
     click = False
+    debug_clouds = False
+    mouseSize = 1
 
-    # --- Main Game Loop --- (Keep as is)
+    player = Player(None, None, None, (TH.screenWidth, TH.screenHeight), {'30': Alkhemikal30, '50': Alkhemikal50, '80': Alkhemikal80, '150': Alkhemikal150, '200': Alkhemikal200}, Cols)
+
+    # --- Main Game Loop ---
     last_time = time.time()
     running = True
     while running:
         mx, my = pygame.mouse.get_pos()
         screen.fill(Cols.oceanBlue)
         screen2.fill((0, 0, 0, 0))
+        screenUI.fill((0, 0, 0, 0))
         dt = time.time() - last_time
         last_time = time.time()
         for event in pygame.event.get():
@@ -152,18 +164,28 @@ if __name__ == "__main__":
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE: running = False
                 if event.key == pygame.K_SPACE: toggle = not toggle
+                if event.key == pygame.K_c: debug_clouds = not debug_clouds
+                if event.key == pygame.K_m: mouseSize = (mouseSize + 1) % 3
 
-        TH.draw(screen2, mx, my, click, showArrows=False, showDebugOverlay=False, showWaterLand=False, showDebugRoutes=False)
+        TH.draw(screen2, mx, my, showArrows=False, showDebugOverlay=False, showWaterLand=False, showDebugRoutes=False)
+        player.handleClick(mx, my, click, TH)
+        player.update(dt * fps)
+        player.draw(TH.playersSurf, screenUI, False)
+        screen2.blit(TH.playersSurf, (0, 0))
+        TH.drawClouds(screen2, mx, my, mouseSize, player, dt, debug_cloud_chunks=debug_clouds)
 
         if toggle:
             fps_val = clock.get_fps()
             fps_text = f"{fps_val:.1f}"
-            drawText(screen2, Cols.debugRed, Alkhemikal30, 5, screen_height - 30, fps_text, Cols.dark, 3, antiAliasing=False)
+            drawText(screen2, Cols.debugRed, Alkhemikal30, 5, screen_height - 90, str(player.selectedTerritory), Cols.dark, 3, antiAliasing=False)
+            drawText(screen2, Cols.debugRed, Alkhemikal30, 5, screen_height - 60, fps_text, Cols.dark, 3, antiAliasing=False)
+            drawText(screen2, Cols.debugRed, Alkhemikal30, 5, screen_height - 30, "[c] to toggle clouds, [m] cycles mouse size", Cols.dark, 3, antiAliasing=False)
             pygame.mouse.set_visible(False)
             pygame.draw.circle(screen2, Cols.dark, (mx + 2, my + 2), 7, 2)
             pygame.draw.circle(screen2, Cols.light, (mx, my), 7, 2)
 
         screen.blit(screen2, (0, 0))
+        screen.blit(screenUI, (0, 0))
         pygame.display.flip()
         clock.tick(fps)
 

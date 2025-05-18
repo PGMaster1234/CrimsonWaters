@@ -1,5 +1,5 @@
 styles = ["regular", "bold", "thin", "extralight"]
-sizes = [i for i in range(1, 100)] + [200]
+sizes = [i for i in range(1, 100)] + [150, 200]
 
 # Dictionary to hold font definitions: {name: (path, size)}
 fonts = {}

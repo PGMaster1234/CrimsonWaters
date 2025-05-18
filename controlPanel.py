@@ -1,21 +1,21 @@
 class GenerationInfo:
     waterThreshold = 0.505
-    mountainThreshold = 0.52
+    mountainThreshold = 0.5125
 
     tileSize = 6
 
-    territorySize = 100
+    territorySize = 250
 
 
 class ResourceInfo:
     resourceTypes = ['wood', 'stone', 'iron', 'pine', 'amber']
     numResources = len(resourceTypes)
 
-    spawnRates = {'wood': 0.018,
-                  'stone': 0.012,
-                  'iron': 0.02,
-                  'pine': 0.002,
-                  'amber': 0.005}
+    spawnRates = {'wood': 0.021,
+                  'stone': 0.014,
+                  'iron': 0.025,
+                  'pine': 0.005,
+                  'amber': 0.006}
 
     @staticmethod
     def getSpawnableTiles(resourceType, tiles):
@@ -36,7 +36,7 @@ class ShipInfo:
     shipClasses = {'fluyt': 'TradeShip', 'carrack': 'TradeShip', 'cutter': 'Warship', 'corsair': 'Warship', 'longShip': 'LongShip', 'galleon': 'LongShip', }
 
     shipHPs = {'fluyt': 50, 'carrack': 100, 'cutter': 75, 'corsair': 90, 'longShip': 80, 'galleon': 120}
-    shipMSs = {'fluyt': 0.6, 'carrack': 0.4, 'cutter': 0.8, 'corsair': 0.7, 'longShip': 0.5, 'galleon': 0.3}
+    shipMSs = {'fluyt': 0.3, 'carrack': 0.2, 'cutter': 0.4, 'corsair': 0.35, 'longShip': 0.25, 'galleon': 0.15}
     shipVisionRanges = {'fluyt': 12, 'carrack': 10, 'cutter': 8, 'corsair': 9, 'longShip': 11, 'galleon': 9}
     shipDMGs = {'fluyt': 0, 'carrack': 0, 'cutter': 15, 'corsair': 25, 'longShip': 10, 'galleon': 20}
     shipAttackRanges = {'fluyt': 0, 'carrack': 0, 'cutter': 3, 'corsair': 4, 'longShip': 2, 'galleon': 3}

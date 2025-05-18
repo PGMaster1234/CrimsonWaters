@@ -8,6 +8,7 @@ def simpleText(screen, color, font, x, y, text):
 
 
 def wrapText(font, text, maxLen):
+    text = str(text)
     words, line, wrappedLines = text.split(), "", []
     for word in words:
         testLine = f"{line} {word}".strip()

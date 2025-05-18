@@ -55,23 +55,23 @@ class Ship:
         self.pos = list(path[0])
         self.rect = pygame.rect.Rect(self.pos[0] - self.size / 2, self.pos[1] - self.size / 2, self.size, self.size)
 
-    def move(self):
+    def move(self, dt):
         if self.path is not None:
             if self.a is None:
                 self.a = normalize_angle(ang(self.pos, self.path[self.currentInd]))
             else:
                 angDiff = normalize_angle(ang(self.pos, self.path[self.currentInd])) - self.a
-                self.a += ((angDiff + math.pi) % (2 * math.pi) - math.pi) / 15
-            self.pos[0] += math.cos(self.a) * self.currentMS
-            self.pos[1] += math.sin(self.a) * self.currentMS
+                self.a += ((angDiff + math.pi) % (2 * math.pi) - math.pi) / 20
+            self.pos[0] += math.cos(self.a) * self.currentMS * dt
+            self.pos[1] += math.sin(self.a) * self.currentMS * dt
 
             self.rect.x, self.rect.y = self.pos[0] - self.size / 2, self.pos[1] - self.size / 2
 
-            if distance(self.pos, self.path[self.currentInd]) < 2 * self.startingTile.size:
+            if distance(self.pos, self.path[self.currentInd]) < 3 * self.startingTile.size:
                 if len(self.path) > self.currentInd + 1:
                     self.currentInd += 1
                 else:
-                    if distance(self.pos, self.path[self.currentInd]) < self.startingTile.size / 2:
+                    if distance(self.pos, self.path[self.currentInd]) < self.startingTile.size:
                         self.path = None
 
     def draw(self, s, debug=False):

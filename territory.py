@@ -11,9 +11,6 @@ SHAPELY_AVAILABLE = True
 
 from locationalObjects import Resource, Harbor
 
-from ships import Ship
-from controlPanel import ShipInfo, ResourceInfo
-
 
 class Territory:
     def __init__(self, screenWidth, screenHeight, centerPos, tiles, allWaterTiles, cols, resource_info=None, structure_info=None):
@@ -30,12 +27,13 @@ class Territory:
         self.containedResources = []
         self.harbors = []
         self.reachableHarbors = {}  # Stores {local_harbor_obj: [reachable_harbor_objs]}
+        self.shortestPathToReachableTerritories = {}  # maps reachable territory : [currentHarbor, targetHarbor, length of route between them, pruned curve points]
         self.territoryCol = randomCol('r')
+        self.selectedTerritoryCol = randomCol('b')
         self.claimed = None  # Placeholder for ownership
         self.id = -1  # Unique identifier assigned by TileHandler
 
         self.coastlines = []
-        self.ships = []
 
         # Surfaces are managed by TileHandler; these are effectively null
         self.surf = None
@@ -60,6 +58,8 @@ class Territory:
         # Spawn initial resources and structures
         self.spawnResources(self.resource_info)
         self.spawnHarbors(self.structure_info)
+        for harbor in self.harbors:
+            harbor.assignHarborParentReference(self)
 
     def prepare_for_pickling(self):
         """Prepare territory data for saving (serialization)."""
@@ -143,7 +143,7 @@ class Territory:
             spawnable_tiles = info.getSpawnableTiles(res_type, self.unusedSpawningTiles)
             spawn_rate = info.spawnRates.get(res_type, 0.0)
 
-            num_to_spawn = int(len(spawnable_tiles) * spawn_rate + random.random())
+            num_to_spawn = int((len(spawnable_tiles) * spawn_rate + random.random()) ** 0.5)
 
             if spawnable_tiles and num_to_spawn > 0:
                 # Ensure we don't try to sample more tiles than available
@@ -189,8 +189,16 @@ class Territory:
     def update_reachable_harbors(self):
         """Updates the dictionary mapping local harbors to harbors reachable via trade routes."""
         self.reachableHarbors.clear()  # Reset the map
+        self.shortestPathToReachableTerritories = {}  # maps reachable territory : [currentHarbor, targetHarbor, length of route between them, pruned curve points]
         for local_harbor in self.harbors:
             self.reachableHarbors[local_harbor] = list(local_harbor.tradeRouteObjects.keys())
+            for targetHarbor in list(local_harbor.tradeRouteObjects.keys()):
+                routeLength = len(local_harbor.tradeRouteObjects[targetHarbor])
+                if targetHarbor in self.shortestPathToReachableTerritories:
+                    if routeLength < self.shortestPathToReachableTerritories[targetHarbor][2]:
+                        self.shortestPathToReachableTerritories[targetHarbor.parentTerritory] = [local_harbor, targetHarbor, routeLength, local_harbor.tradeRoutesPoints[targetHarbor]]
+                else:
+                    self.shortestPathToReachableTerritories[targetHarbor.parentTerritory] = [local_harbor, targetHarbor, routeLength, local_harbor.tradeRoutesPoints[targetHarbor]]
 
     def drawInternalTerritoryBaseline(self, target_surf, target_debug_surf):
         """Draws static territory elements (borders, resources, harbors) onto TileHandler's surfaces."""
@@ -223,30 +231,23 @@ class Territory:
         for harbor in self.harbors:
             harbor.draw(target_surf)
 
-    def drawCurrent(self, s, mx, my, click, debugRoutes=False):
-        """Draws dynamic elements (like hover effects) onto the provided surface `s`."""
+    def drawCurrent(self, s, mx, my, debugRoutes=False):
         hover = False
-        # Check for hover using Shapely if available
         if SHAPELY_AVAILABLE and self.polygon:
-            # Create a Shapely Point for the mouse position
             mouse_point = Point(mx, my)
-            # Check if the territory's polygon contains the mouse point
             hover = self.polygon.contains(mouse_point)
 
-        # If hovering, draw the highlight effect
         if hover:
-            fill_color = setOpacity(self.territoryCol, 60)  # Semi-transparent territory color
-            line_color = setOpacity(self.territoryCol, 200)  # More opaque border color
-            width = 4  # Highlight border thickness
+            fill_color = setOpacity(self.territoryCol, 60)
+            line_color = setOpacity(self.territoryCol, 200)
+            width = 4
 
-            # Draw filled polygon and thicker lines for exterior borders
             for border in self.exteriors:
-                if len(border) > 2:  # Need at least 3 points for a polygon
+                if len(border) > 2:
                     pygame.draw.polygon(s, fill_color, border)
                 if len(border) > 1:
                     pygame.draw.lines(s, line_color, True, border, width=width)
 
-            # Draw thicker lines for interior borders (holes)
             for border in self.interiors:
                 if len(border) > 1:
                     pygame.draw.lines(s, line_color, True, border, width=width)
@@ -255,10 +256,17 @@ class Territory:
                 for target_harbor in reachable_harbors:
                     src_harbor.drawRoute(s, target_harbor, self.cols.debugRed, debugRoutes)
 
-            if click and len(self.ships) == 0:
-                self.ships.append(Ship(self.harbors[0].tile, "fluyt", ShipInfo, ResourceInfo))
-                self.ships[0].beginVoyage(self.harbors[0].tradeRoutesPoints[list(self.harbors[0].tradeRoutesPoints.keys())[0]])
+    def drawBorder(self, s):
+        fill_color = setOpacity(self.selectedTerritoryCol, 60)
+        line_color = setOpacity(self.selectedTerritoryCol, 200)
+        width = 6
 
-        if len(self.ships) != 0:
-            self.ships[0].move()
-            self.ships[0].draw(s)
+        for border in self.exteriors:
+            if len(border) > 2:
+                pygame.draw.polygon(s, fill_color, border)
+            if len(border) > 1:
+                pygame.draw.lines(s, line_color, True, border, width=width)
+
+        for border in self.interiors:
+            if len(border) > 1:
+                pygame.draw.lines(s, line_color, True, border, width=width)

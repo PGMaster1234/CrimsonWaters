@@ -39,6 +39,7 @@ class DefensePost: pass
 
 class Harbor:
     def __init__(self, tile, isUsable=False):
+        self.parentTerritory = None
         self.tile = tile  # Direct reference to the tile it sits on
         self.harbor_id = -1  # Assigned by TileHandler
         # --- Data stored using IDs for pickling ---
@@ -49,6 +50,9 @@ class Harbor:
         self.isUsable = isUsable
 
         self.prunedPathPoints = []
+
+    def assignHarborParentReference(self, parentTerritory):
+        self.parentTerritory = parentTerritory
 
     def prepare_for_pickling(self):
         """Ensure only ID-based data is kept for pickling."""
@@ -217,7 +221,6 @@ class Harbor:
         pygame.draw.polygon(s, ((200, 30, 30) if self.isUsable else (100, 10, 10)), self.tile.hex)
 
     def drawRoute(self, s, otherHarbor, color=(127, 63, 63, 180), debug=False):
-        # Use the reconstructed object path map
         pathObjects = self.tradeRouteObjects[otherHarbor]
         if pathObjects and len(pathObjects) >= 1:
             points = self.tradeRoutesPoints[otherHarbor]
