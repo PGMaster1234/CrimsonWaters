@@ -2,7 +2,7 @@ class GenerationInfo:
     waterThreshold = 0.505
     mountainThreshold = 0.5125
 
-    tileSize = 6
+    tileSize = 25
 
     territorySize = 250
 

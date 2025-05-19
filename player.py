@@ -35,10 +35,10 @@ class Player:
         self.selectedTerritoryResetTimer = 0
         self.clickedOnInvalidTerritory = False
 
-    def handleClick(self, mx, my, click, TH):
+    def handleClick(self, mx, my, click, dt, TH):
         if self.selectedTerritoryResetTimer > 0:
             self.clickedOnInvalidTerritory = False
-        self.selectedTerritoryResetTimer += 1
+        self.selectedTerritoryResetTimer += dt
         clickedOnTerritory = False
         for terr_id_list in TH.contiguousTerritoryIDs:
             for terr_id in terr_id_list:

@@ -7,3 +7,10 @@ One speed up you can do for the pre-computation is in the order you search chunk
 Also, for every chunk after this you can just shift the indexes and remove indices that are outside the maximum dimensions of the chunk grid since the "pattern" nearby chunks will always be in is perfectly consistent.
 
 CLOUD CHUNKING SYSTEM RUNTIME OPTIMIZATION
+Ok, so there are many places to speed this process up.
+1) Every tile being reset every frame. This is unnecessary. Most tiles on the screen are either already opaque and staying fully opaque this new frame or already transparent and staying fully transparent. Add a boolean within each tile for whether or not its transparency is changing, and only draw the polygon if it's transparency has changed.
+2) You shouldn't be looping through every tile in the first place. Tile opacities should never get "reset". Only tiles within the given radius (so being set to fully transparent or partially transparent) should be getting accessed at all, since other tiles are by default not changing. Only internal and edge chunks should ever be accessed in each frame.
+3) Don't reset the cloudSurf every frame. Redrawn tiles don't "stack" or "add", so they will properly cover up the previous tile and its transparency with the new correct color.
+4) Ensure that the cloudSurf begins (in the draw2internal screen) as a fully drawn surface where every cloud is fully shown (all starting fully opaque).
+5) Clouds don't need fancy opacity storage and other checks. Simply find the new calculated opacity and set the tile's opacity to that value without any smoothing. Remove all extraneous smoothing variables that are no longer needed.
+Provide the entire updated code file with these changes implemented. Do not add excessive line by line comments. Do not use inline statements or semi-colons. Do not add excessive try-catches or checks for whether functions, libraries, and surfs exist.

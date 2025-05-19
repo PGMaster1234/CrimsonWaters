@@ -155,7 +155,7 @@ if __name__ == "__main__":
         screen.fill(Cols.oceanBlue)
         screen2.fill((0, 0, 0, 0))
         screenUI.fill((0, 0, 0, 0))
-        dt = time.time() - last_time
+        dt = (time.time() - last_time) * fps
         last_time = time.time()
         for event in pygame.event.get():
             if event.type == pygame.QUIT: running = False
@@ -168,11 +168,11 @@ if __name__ == "__main__":
                 if event.key == pygame.K_m: mouseSize = (mouseSize + 1) % 3
 
         TH.draw(screen2, mx, my, showArrows=False, showDebugOverlay=False, showWaterLand=False, showDebugRoutes=False)
-        player.handleClick(mx, my, click, TH)
-        player.update(dt * fps)
+        player.handleClick(mx, my, click, dt, TH)
+        player.update(dt)
         player.draw(TH.playersSurf, screenUI, False)
         screen2.blit(TH.playersSurf, (0, 0))
-        TH.drawClouds(screen2, mx, my, mouseSize, player, dt, debug_cloud_chunks=debug_clouds)
+        TH.drawClouds(screen2, mx, my, mouseSize, player)
 
         if toggle:
             fps_val = clock.get_fps()
