@@ -204,9 +204,9 @@ def setOpacity(color, newOpacity):
     return color[0], color[1], color[2], newOpacity
 
 
-def normalize(value, minValue, maxValue, doesCap=False):
+def normalize(value, minValue, maxValue, clamp=False):
     output = (value - minValue) / (maxValue - minValue)
-    if doesCap:
+    if clamp:
         if output > 1:
             output = 1
         if output < 0:
