@@ -14,3 +14,17 @@ Ok, so there are many places to speed this process up.
 4) Ensure that the cloudSurf begins (in the draw2internal screen) as a fully drawn surface where every cloud is fully shown (all starting fully opaque).
 5) Clouds don't need fancy opacity storage and other checks. Simply find the new calculated opacity and set the tile's opacity to that value without any smoothing. Remove all extraneous smoothing variables that are no longer needed.
 Provide the entire updated code file with these changes implemented. Do not add excessive line by line comments. Do not use inline statements or semi-colons. Do not add excessive try-catches or checks for whether functions, libraries, and surfs exist.
+
+LOADING SCREEN MISSING TASKS (NO PROGRESS BAR)
+During the generation process while the user is on the loading screen, there is a period of a few seconds where the screen shows
+"initializing worker" and "worker initialization done". This is before the screen that shows "finalizing generation" and
+"retrieving map data". During that second screen where the main process is receiving the child process tile handler data,
+the screen temporarily freezes. This is expected. Before this, however, during the first screen the program appears to
+be computing something since nothing changes. The "worker initialization: done"  progress bar has completed but nothing
+on the screen changes (other than the loading animation, meaning it's not frozen). This means another task is being computed
+even though it isn't shown on the screen with a progress bar. Find this task, store its timer with the other tasks,
+and ensure it's displayed on the loading screen. Provide entire updated code files, not segments. Do NOT use inline statements.
+Do NOT add excessive comments. NEVER use semicolons.
+
+I provided the times below (these are stored in the execution_times.csv file) for reference.
+... <pasted timers> ...

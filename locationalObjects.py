@@ -220,7 +220,7 @@ class Harbor:
     def draw(self, s):
         pygame.draw.polygon(s, ((200, 30, 30) if self.isUsable else (100, 10, 10)), self.tile.hex)
 
-    def drawRoute(self, s, otherHarbor, color=(127, 63, 63, 180), debug=False):
+    def drawRoute(self, s, otherHarbor, color=(94, 32, 32), debug=False):
         pathObjects = self.tradeRouteObjects[otherHarbor]
         if pathObjects and len(pathObjects) >= 1:
             points = self.tradeRoutesPoints[otherHarbor]
