@@ -225,21 +225,11 @@ class Territory:
         for harbor in self.harbors:
             harbor.draw(target_surf)
 
-    def drawHover(self, s):
-        fill_color = setOpacity(self.territoryCol, 60)
-        line_color = setOpacity(self.territoryCol, 200)
+    def drawCurrent(self, s, colorCode):
+        tempCol = {'r': self.territoryCol, 'b': self.selectedTerritoryCol}
+        fill_color = setOpacity(tempCol[colorCode], 60)
+        line_color = setOpacity(tempCol[colorCode], 200)
         width = 4
-
-        for border in self.exteriors:
-            if len(border) > 2: pygame.draw.polygon(s, fill_color, border)
-            if len(border) > 1: pygame.draw.lines(s, line_color, True, border, width=width)
-        for border in self.interiors:
-            if len(border) > 1: pygame.draw.lines(s, line_color, True, border, width=width)
-
-    def drawSelected(self, s):
-        fill_color = setOpacity(self.selectedTerritoryCol, 60)
-        line_color = setOpacity(self.selectedTerritoryCol, 200)
-        width = 6
 
         for border in self.exteriors:
             if len(border) > 2: pygame.draw.polygon(s, fill_color, border)

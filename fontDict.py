@@ -1,5 +1,5 @@
 styles = ["regular", "bold", "thin", "extralight"]
-sizes = [i for i in range(1, 100)] + [150, 200]
+sizes = [i for i in range(1, 100)] + [150, 200, 250, 300]
 
 # Dictionary to hold font definitions: {name: (path, size)}
 fonts = {}
@@ -15,7 +15,7 @@ for style in styles:
         fonts[font_name] = (font_path, size)
 
 # Add Alkhemikal fonts
-alkhemikal_path = f"{font_dir}Alkhemikal.ttf"
+alkhemikal_path = f"{font_dir}Alkhemikal2.ttf"
 for size in sizes:
     font_name = f"Alkhemikal{size}"
     fonts[font_name] = (alkhemikal_path, size)

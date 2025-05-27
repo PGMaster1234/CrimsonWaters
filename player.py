@@ -2,7 +2,6 @@ import pygame
 import random
 from controlPanel import ShipInfo, ResourceInfo
 from ships import Ship
-from shapely.geometry import Point
 from text import drawText
 
 
@@ -73,8 +72,6 @@ class Player:
         self.surf.fill((0, 0, 0, 0))
         for ship in self.ships:
             ship.draw(self.surf, debug)
-        if self.selectedTerritory is not None:
-            self.selectedTerritory.drawSelected(self.surf)
         if self.clickedOnInvalidTerritory:
             shakeStrength = 2
             shake = (random.randint(-shakeStrength, shakeStrength), random.randint(-shakeStrength, shakeStrength))

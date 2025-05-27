@@ -1,4 +1,3 @@
-# TileHandler.py
 import pygame
 import math
 import random
@@ -80,11 +79,23 @@ class Hex:
 
 
 class TileHandler:
-    def __init__(self, width, height, size, cols, waterThreshold=0.51, mountainThreshold=0.51, territorySize=100, font=None, font_name=None, resource_info=None, structure_info=None, status_queue: multiprocessing.Queue = None, preset_times: dict = None):
+    def __init__(self, width, height, size, cols, waterThreshold=0.51, mountainThreshold=0.51, territorySize=100, font=None, font_name=None, resource_info=None, structure_info=None, status_queue: multiprocessing.Queue = None, preset_times: dict = None, seed: int = None):
 
         self.execution_times = {}
         self.status_queue = status_queue
         self.preset_times = preset_times if preset_times else {}
+
+        # Seed setup
+        self.seed = seed
+        if self.seed is not None:
+            random.seed(self.seed)
+            np.random.seed(self.seed)
+            print(f"WORKER STDOUT: Initialized TileHandler with provided seed: {self.seed}")
+        else:
+            self.seed = random.randint(0, 2**32 - 1)
+            random.seed(self.seed)
+            np.random.seed(self.seed)
+            print(f"WORKER STDOUT: Initialized TileHandler with new random seed: {self.seed}")
 
         self.screenWidth = width
         self.screenHeight = height
@@ -901,15 +912,23 @@ class TileHandler:
             for tile in self.tiles:
                 tile.showWaterLand(self.territorySurf, self.font, text_color)
 
-        if selected_territory:
-            if hasattr(selected_territory, 'drawSelected'):
-                selected_territory.drawSelected(self.territorySurf)
-
-        if hovered_territory and hovered_territory is not selected_territory:
-            if hasattr(hovered_territory, 'drawHover'):
-                hovered_territory.drawHover(self.territorySurf)
-            if hasattr(hovered_territory, 'drawRoutes'):
-                hovered_territory.drawRoutes(self.territorySurf, self.cols.crimson)
+        # somehow this can't be condensed. this took 2 minutes and a drawing to write
+        if hovered_territory:
+            if selected_territory is None:
+                hovered_territory.drawCurrent(self.territorySurf, 'b')
+            else:
+                if hovered_territory == selected_territory:
+                    hovered_territory.drawCurrent(self.territorySurf, 'r')
+                else:
+                    selected_territory.drawCurrent(self.territorySurf, 'r')
+                    hovered_territory.drawCurrent(self.territorySurf, 'b')
+                selected_territory.drawRoutes(self.territorySurf, self.cols.brightCrimson)
+            if (selected_territory is None) or (selected_territory == hovered_territory):
+                hovered_territory.drawRoutes(self.territorySurf, self.cols.brightCrimson)
+        else:
+            if selected_territory is not None:
+                selected_territory.drawCurrent(self.territorySurf, 'r')
+                selected_territory.drawRoutes(self.territorySurf, self.cols.brightCrimson)
 
         s.blit(self.territorySurf, (0, 0))
 

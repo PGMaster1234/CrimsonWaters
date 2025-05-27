@@ -226,12 +226,12 @@ class Harbor:
             points = self.tradeRoutesPoints[otherHarbor]
             draw_color = tuple(color) if len(color) == 4 and (s.get_flags() & pygame.SRCALPHA) else tuple(color[:3])
             if len(points) > 1:
-                pygame.draw.lines(s, draw_color, False, points, 2)
+                pygame.draw.lines(s, draw_color, False, points, 3)
             if debug:
                 if len(points) > 1:
                     for p in points:
                         pygame.draw.circle(s, (0, 0, 255), p, 3)
-                    pygame.draw.lines(s, (0, 0, 255), False, points, 1)
+                    pygame.draw.lines(s, (0, 0, 255), False, points, 2)
                 if len(self.prunedPathPoints) > 1:
                     for p in self.prunedPathPoints:
-                        pygame.draw.circle(s, (0, 255, 0), p, 3)
+                        pygame.draw.circle(s, (0, 255, 0), p, 4)
