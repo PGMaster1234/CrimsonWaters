@@ -80,35 +80,22 @@ def get_local_ip_suggestion():
     return ip
 
 
-def server_thread(sock_instance, listen_ip, listen_port): # These variables are not used in this function's body
-    """
-    Listens for incoming UDP messages and puts them into MSG_QUEUE.
-    The listen_ip and listen_port parameters are not used within this function's body,
-    as the socket is already bound by the calling code. They serve for
-    documentation and potential future expansion.
-    """
+def server_thread(sock_instance, listen_ip, listen_port):
     while True:
         try:
-            # Check if the socket is still open. If the main thread closes it,
-            # recvfrom will raise an error, causing the thread to exit.
-            # This is a common way to terminate simple blocking threads.
             data, address = sock_instance.recvfrom(1024)
             MSG_QUEUE.put((address, data.decode()))
         except socket.timeout:
             continue
         except OSError as e:
-            # For example, if the socket is closed by the main thread
             print(f"Server thread error: {e}. Exiting server thread.")
-            break  # Exit the loop and terminate the thread
+            break
         except Exception as e:
             print(f"Unexpected error in server thread: {e}")
-            break  # Exit on unexpected errors
+            break
 
 
 def client_recv_thread(sock):
-    """
-    Listens for incoming UDP messages for the client and puts them into MSG_QUEUE.
-    """
     while True:
         try:
             data, address = sock.recvfrom(1024)
@@ -116,7 +103,6 @@ def client_recv_thread(sock):
         except socket.timeout:
             continue
         except OSError as e:
-            # For example, if the socket is closed by the main thread
             print(f"Client receive thread error: {e}. Exiting client receive thread.")
             break
         except Exception as e:
@@ -195,7 +181,6 @@ def build_tile_handler_worker(args_tuple):
     _font = None
     if font_name_to_load and font_name_to_load in font_definitions_dict:
         try:
-            # Pygame must be initialized in each process that uses it
             pygame.init()
             font_path, font_size = font_definitions_dict[font_name_to_load]
             _font = pygame.font.Font(font_path, font_size)
@@ -252,34 +237,31 @@ if __name__ == "__main__":
     username = ''.join(random.choice(string.ascii_uppercase) for _ in range(5))
     local_ip_full = get_local_ip_suggestion()
     local_ip_suffix = tuple(map(int, local_ip_full.split('.')))[2:]
-    connectingPort = 4000 + random.randint(0, 999)  # Base port for hosting
+    connectingPort = 4000 + random.randint(0, 999)
 
-    # Network related states
     room_code = ""
     mode = "INIT"
-    players = {}  # Only relevant for host: stores {address: username} of connected clients
-    joined = False  # Only relevant for client: indicates if client successfully joined host
-    server_socket = None  # Server socket for hosting
-    server_thread_instance = None  # To hold reference to the server thread
+    players = {}
+    joined = False
+    server_socket = None
+    server_thread_instance = None
 
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     client_socket.settimeout(0.5)
-    # Start client receiving thread
     threading.Thread(target=client_recv_thread, args=(client_socket,), daemon=True).start()
 
     seed_to_send = None
     seed = None
     requestSentTime = None
 
-    target_host_ip = None  # IP of the host we're trying to join (or our own if hosting)
-    target_host_port = None  # Port of the host we're trying to join (or our own if hosting)
+    target_host_ip = None
+    target_host_port = None
 
-    # Variables for client/host pings and timeouts
-    client_ping_interval = 0.5  # How often clients send pings (seconds)
-    client_timeout_threshold = 2.0  # How long until host considers a client disconnected (seconds)
-    last_ping_sent_time = 0.0  # Client-side: last time a ping was sent
-    client_last_ping_time = {}  # Host-side: {address: last_ping_timestamp} for connected clients
-    last_host_check_time = 0.0  # Host-side: last time timeout check was run
+    client_ping_interval = 0.5
+    client_timeout_threshold = 2.0
+    last_ping_sent_time = 0.0
+    client_last_ping_time = {}
+    last_host_check_time = 0.0
 
     toggle = True
     userString = ""
@@ -296,12 +278,26 @@ if __name__ == "__main__":
     PHASE_RETRIEVING_MAP_DATA = "Retrieving World Data"
     PHASE_GFX_INIT = "Initializing Graphics"
 
-    LOADING_STEPS_ORDER = ["tileGen", "linkAdj", "cloudPrecompParallel", "generationCycles", "setTileColors", "findLandRegionsParallel", "indexOceansParallel", "assignCoastTiles", "createTerritories", "connectHarborsParallel", "workerInit", "dataSerialization", "retrieveMapData", "gfxSurfaceSetup", "gfxFontSetup", "gfxRebuildMaps", "gfxRestoreTerrLinks", "gfxRestoreAdjLinks", "gfxTerrHarborInit", "gfxUpdateReachableHarbors", "gfxDrawInternal", "gfxCloudPrecompConditional", "gfxInitCloudSurf",
-                           "gfxTotalInit"]
+    # Restored to only include gfxTotalInit, as individual gfx steps are not reported externally
+    LOADING_STEPS_ORDER = ["tileGen", "linkAdj", "cloudPrecompParallel", "generationCycles", "setTileColors", "findLandRegionsParallel", "indexOceansParallel", "assignCoastTiles", "createTerritories", "connectHarborsParallel", "precomputeTerritoryVision", "workerInit", "dataSerialization", "retrieveMapData", "gfxTotalInit"]
 
-    DISPLAY_NAMES_MAP = {"tileGen": "Tile Generation", "linkAdj": "Linking Adjacent Objects", "cloudPrecompParallel": "Cloud Precomputation (Parallel)", "generationCycles": "50 Generation Cycles", "setTileColors": "Setting Tile Colors", "findLandRegionsParallel": "Finding Land Regions (Parallel)", "indexOceansParallel": "Indexing Oceans (Parallel)", "assignCoastTiles": "Assigning Coast Tiles", "createTerritories": "Creating Territories", "connectHarborsParallel": "Connecting Harbors (Parallel)",
-                         "workerInit": "Worker Initialization", "dataSerialization": "Data Serialization for Transfer", "retrieveMapData": "Retrieving World Data", "gfxSurfaceSetup": "Graphics: Surface Setup", "gfxFontSetup": "Graphics: Font Setup", "gfxRebuildMaps": "Graphics: Rebuild Maps", "gfxRestoreTerrLinks": "Graphics: Restore Territory Links", "gfxRestoreAdjLinks": "Graphics: Restore Adjacent Links", "gfxTerrHarborInit": "Graphics: Territory & Harbor Init",
-                         "gfxUpdateReachableHarbors": "Graphics: Update Reachable Harbors", "gfxDrawInternal": "Graphics: Draw Internal Screen", "gfxCloudPrecompConditional": "Graphics: Cloud Precomp (Cond)", "gfxInitCloudSurf": "Graphics: Initialize Cloud Surface", "gfxTotalInit": "Graphics: Total Initialization"}
+    DISPLAY_NAMES_MAP = {
+        "tileGen": "Tile Generation",
+        "linkAdj": "Linking Adjacent Objects",
+        "cloudPrecompParallel": "Cloud Precomputation (Parallel)",
+        "generationCycles": "50 Generation Cycles",
+        "setTileColors": "Setting Tile Colors",
+        "findLandRegionsParallel": "Finding Land Regions (Parallel)",
+        "indexOceansParallel": "Indexing Oceans (Parallel)",
+        "assignCoastTiles": "Assigning Coast Tiles",
+        "createTerritories": "Creating Territories",
+        "connectHarborsParallel": "Connecting Harbors (Parallel)",
+        "precomputeTerritoryVision": "Precomputing Territory Vision",
+        "workerInit": "Worker Initialization",
+        "dataSerialization": "Data Serialization for Transfer",
+        "retrieveMapData": "Retrieving World Data",
+        "gfxTotalInit": "Graphics Initialization"
+    }
 
     task_display_states = {}
     for step_name_key in LOADING_STEPS_ORDER:
@@ -332,15 +328,14 @@ if __name__ == "__main__":
     running = True
     pygame.mouse.set_visible(False)
 
-    # Pre-draw static background to screen2 once.
     screen2.blit(generationScreenBackgroundImg, (0, 0))
     overlay = pygame.Surface((screen_width, screen_height), pygame.SRCALPHA)
     overlay.fill((0, 10, 10, 200))
     screen2.blit(overlay, (0, 0))
 
     while running:
-        screen.fill(Cols.dark) # Always clear main screen
-        screenUI.fill((0, 0, 0, 0)) # Always clear UI layer
+        screen.fill(Cols.dark)
+        screenUI.fill((0, 0, 0, 0))
         dt = time.time() - last_time
         dt *= fps
         last_time = time.time()
@@ -348,7 +343,6 @@ if __name__ == "__main__":
 
         lobby_timer_for_error_display -= 1 * dt
 
-        # --- Process Network Messages (Runs every frame) ---
         try:
             while not MSG_QUEUE.empty():
                 addr, msg = MSG_QUEUE.get_nowait()
@@ -356,21 +350,18 @@ if __name__ == "__main__":
                     if msg.startswith("JOIN:"):
                         name = msg.split(":", 1)[1]
                         players[addr] = name
-                        client_last_ping_time[addr] = time.time() # Record initial ping
+                        client_last_ping_time[addr] = time.time()
                         if server_socket:
                             server_socket.sendto(b"ACK_JOIN", addr)
                         print(f"Main: Player '{name}' joined from {addr}")
                     elif msg.startswith("PING:"):
-                        if addr in players: # Only update if it's a known player
+                        if addr in players:
                             client_last_ping_time[addr] = time.time()
-                            # print(f"Host: Received ping from {players[addr]} at {addr}") # For debugging
-                        # else:
-                            # print(f"Host: Received ping from unknown address {addr}. Ignoring.") # Can be noisy, uncomment for debug
 
                 elif mode == "CLIENT_LOBBY":
                     if msg == "ACK_JOIN":
                         joined = True
-                        last_ping_sent_time = time.time() # Initialize ping timer on successful join
+                        last_ping_sent_time = time.time()
                         print("Main: Successfully joined lobby")
                     elif msg.startswith("SEED:"):
                         seed = int(msg.split(":", 1)[1])
@@ -381,7 +372,6 @@ if __name__ == "__main__":
             pass
         except Exception as e_queue_process:
             print(f"Main Error processing network queue: {e_queue_process}")
-        # --- End Network Message Processing ---
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -390,7 +380,7 @@ if __name__ == "__main__":
                 click = True
             if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                 click = False
-            if event.type == pygame.KEYDOWN: # Corrected from pygame.K_0
+            if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     running = False
                 if event.key == pygame.K_TAB:
@@ -402,11 +392,11 @@ if __name__ == "__main__":
                     txt = userString.strip()
 
                     if mode == "INIT":
-                        if len(userString) != 6 and userString.lower() != 'start':
+                        if len(userString) != 6 and userString.lower() not in ['start', 's']:
                             lobby_timer_for_error_display = 0.5 * fps
                             userStringErrorDisplay = "type smth" if userString == "" else "that's not a code"
                             continue
-                        if txt.lower() == "start":
+                        if txt.lower() in ["start", "s"]:
                             connectingPort = find_free_port(connectingPort)
                             server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                             server_socket.bind(("0.0.0.0", connectingPort))
@@ -435,7 +425,7 @@ if __name__ == "__main__":
                                 continue
 
                     elif mode == "HOST_LOBBY":
-                        if txt.lower() == 'begin':
+                        if txt.lower() in ["begin", "b"]:
                             seed_to_send = random.randint(0, 2 ** 31 - 1)
                             for addr in players:
                                 if server_socket:
@@ -455,7 +445,7 @@ if __name__ == "__main__":
                             mode = "INIT"
                             room_code = ""
                             players = {}
-                            client_last_ping_time = {} # Clear ping timestamps
+                            client_last_ping_time = {}
                             seed_to_send = None
                             seed = None
                             requestSentTime = None
@@ -482,7 +472,7 @@ if __name__ == "__main__":
                             userString = ""
                             userStringErrorDisplay = None
                             lobby_timer_for_error_display = 0
-                            last_ping_sent_time = 0.0 # Reset client-side ping timer
+                            last_ping_sent_time = 0.0
                             continue
                         else:
                             lobby_timer_for_error_display = 0.5 * fps
@@ -516,8 +506,7 @@ if __name__ == "__main__":
                     keyHoldFrames[key] = delayThreshold
 
         if mode != "IN_GAME":
-            # Client-side ping sending
-            if mode == "CLIENT_LOBBY" and joined: # Only send pings once joined
+            if mode == "CLIENT_LOBBY" and joined:
                 if time.time() - last_ping_sent_time > client_ping_interval:
                     if target_host_ip and target_host_port:
                         try:
@@ -535,7 +524,6 @@ if __name__ == "__main__":
                         mode = "INIT"
                         userStringErrorDisplay = "Connection error"
 
-            # Client-side timeout if ACK_JOIN not received
             if mode == "CLIENT_LOBBY" and not joined:
                 if requestSentTime and time.time() - requestSentTime > 2.0:
                     lobby_timer_for_error_display = 1.0 * fps
@@ -544,10 +532,9 @@ if __name__ == "__main__":
                     requestSentTime = None
                     mode = "INIT"
 
-            # Host-side periodic check for client timeouts
-            if mode == "HOST_LOBBY" and time.time() - last_host_check_time > 1.0: # Check less frequently than pings
+            if mode == "HOST_LOBBY" and time.time() - last_host_check_time > 1.0:
                 disconnected_players = []
-                for addr, last_time_ping in client_last_ping_time.items(): # Renamed 'last_time' to avoid conflict with outer loop's 'last_time'
+                for addr, last_time_ping in client_last_ping_time.items():
                     if time.time() - last_time_ping > client_timeout_threshold:
                         disconnected_players.append(addr)
 
@@ -558,7 +545,6 @@ if __name__ == "__main__":
                     del client_last_ping_time[addr_to_remove]
                 last_host_check_time = time.time()
 
-            # --- UI Drawing for Lobby/Init Screens ---
             if mode == "INIT":
                 drawText(screenUI, Cols.brightCrimson, Alkhemikal200, main_title_x, screen_center[1] - 80, "Crimson", Cols.dark, shadowSize=5, justify="center", centeredVertically=True)
                 drawText(screenUI, Cols.brightCrimson, Alkhemikal200, main_title_x, screen_center[1] + 80, "Wakes", Cols.dark, shadowSize=5, justify="center", centeredVertically=True)
@@ -604,10 +590,10 @@ if __name__ == "__main__":
             clock.tick(fps)
             continue
 
-        # --- Game Initialization/Loading Screen (After Lobby) ---
         if future is None:
             print(f"Main: Submitting TileHandler generation task to worker with seed: {seed}.")
-            worker_args = (screen_width, screen_height, GenerationInfo, font_name_needed_by_worker, fonts_definitions, Cols, ResourceInfo, StructureInfo, status_queue_for_main_thread, PRESET_EXECUTION_TIMES, seed)
+            # Pass scaled dimensions for TileHandler
+            worker_args = (screen_width * GenerationInfo.mapSizeScalar, screen_height * GenerationInfo.mapSizeScalar, GenerationInfo, font_name_needed_by_worker, fonts_definitions, Cols, ResourceInfo, StructureInfo, status_queue_for_main_thread, PRESET_EXECUTION_TIMES, seed)
             future = executor.submit(build_tile_handler_worker, worker_args)
             loading_screen_start_time = time.time()
 
@@ -638,7 +624,9 @@ if __name__ == "__main__":
                     if TH and hasattr(TH, 'execution_times'):
                         all_current_run_times.update(TH.execution_times)
 
+                    # After retrieval, initialize graphics on the main thread
                     if TH:
+                        # Report the start of the single combined graphics task
                         task_data_gfx_total = task_display_states["gfxTotalInit"]
                         task_data_gfx_total['status'] = 'Starting'
                         task_data_gfx_total['start_time'] = time.time()
@@ -646,17 +634,14 @@ if __name__ == "__main__":
 
                         TH.initialize_graphics_and_external_libs(loaded_fonts, status_queue_for_main_thread, PRESET_EXECUTION_TIMES)
 
-                        gfx_total_duration = time.time() - task_data_gfx_total['start_time']
-                        task_data_gfx_total['status'] = 'Finished'
-                        task_data_gfx_total['duration'] = gfx_total_duration
-
-                        if hasattr(TH, 'execution_times'):
-                            all_current_run_times.update(TH.execution_times)
+                        # The gfxTotalInit task will report its own FINISHED status when done
+                        # The TH_fully_initialized flag will be set by processing that status from the queue
                     else:
                         task_data = task_display_states["retrieveMapData"]
                         task_data['status'] = 'Error'
                         task_data['duration'] = 0.0
-                        TH_fully_initialized = True
+                        TH_fully_initialized = True # Mark as complete (with error)
+                        print("Main Error: TH is None after future.result().")
 
                 except Exception as e_future_result:
                     retrieval_duration = time.time() - actual_retrieval_start_time
@@ -676,6 +661,7 @@ if __name__ == "__main__":
                     display_name_human_readable = DISPLAY_NAMES_MAP.get(step_name_key_from_worker, step_name_key_from_worker)
 
                     if step_name_key_from_worker not in task_display_states:
+                        # This should no longer print for individual gfx steps if generation.py is updated
                         print(f"Main: Received unknown task status key: '{step_name_key_from_worker}' (mapped to '{display_name_human_readable}'). Please check config.")
                         continue
 
@@ -692,13 +678,13 @@ if __name__ == "__main__":
                     elif status_type == "FINISHED":
                         current_task_data['status'] = 'Finished'
                         current_task_data['duration'] = time_value
-                        if step_name_key_from_worker == "gfxTotalInit":
+                        if step_name_key_from_worker == "gfxTotalInit": # This is the only step that will set this
                             TH_fully_initialized = True
                     elif status_type == "ERROR":
                         current_task_data['status'] = 'Error'
                         current_task_data['duration'] = 0.0
                         print(f"Main (Error from queue): Task '{display_name_human_readable}' failed - Details: {time_value}")
-                        TH_fully_initialized = True
+                        TH_fully_initialized = True # Mark as complete (with error)
             except (multiprocessing.queues.Empty, EOFError):
                 pass
             except Exception as e_queue:
@@ -708,15 +694,15 @@ if __name__ == "__main__":
             drawText(screenUI, Cols.brightCrimson, Alkhemikal200, main_title_x, screen_center[1] - 150, "Crimson", Cols.dark, shadowSize=5, justify="center", centeredVertically=True)
             drawText(screenUI, Cols.brightCrimson, Alkhemikal200, main_title_x, screen_center[1] - 10, "Wakes", Cols.dark, shadowSize=5, justify="center", centeredVertically=True)
 
-            current_overall_phase = PHASE_WORKER_INIT
-            if task_display_states["retrieveMapData"]['status'] in ['Starting', 'Sent', 'Finished', 'Error']:
+            # Corrected logic for current_overall_phase: Check latest phases first
+            current_overall_phase = PHASE_WORKER_INIT # Default/Initial phase
+            if task_display_states["gfxTotalInit"]['status'] in ['Starting', 'Sent', 'Finished', 'Error']:
+                current_overall_phase = PHASE_GFX_INIT
+            elif task_display_states["retrieveMapData"]['status'] in ['Starting', 'Sent', 'Finished', 'Error']:
                 current_overall_phase = PHASE_RETRIEVING_MAP_DATA
             elif task_display_states["dataSerialization"]['status'] in ['Starting', 'Sent', 'Finished', 'Error']:
                 current_overall_phase = PHASE_DATA_TRANSFER_PREP
-            elif task_display_states["gfxTotalInit"]['status'] in ['Starting', 'Sent', 'Finished', 'Error']:
-                current_overall_phase = PHASE_GFX_INIT
-            elif task_display_states["workerInit"]['status'] in ['Starting', 'Sent', 'Finished', 'Error']:
-                current_overall_phase = PHASE_WORKER_INIT
+            # No `elif` for `workerInit` needed, as it's the default if earlier phases haven't started.
 
             top_loading_text = current_overall_phase + ("." * int(numPeriods))
             if TH_fully_initialized and TH:
@@ -733,6 +719,8 @@ if __name__ == "__main__":
                 task_y_pos = single_task_display_start_y + y_pos_offset
 
                 display_name_human_readable = DISPLAY_NAMES_MAP.get(task_name_key, task_name_key)
+                if display_name_human_readable == "Worker Initialization": # This is an overall phase, not a granular task to list
+                    continue
 
                 infoText = ""
                 progress_ratio = 0.0
@@ -743,14 +731,14 @@ if __name__ == "__main__":
                 elif status == 'Starting':
                     elapsed_time = time.time() - task_data['start_time']
                     expected = task_data['expected_time']
-                    expected_str = f"{expected:.2f}s" if expected != INITIAL_PRESET_PLACEHOLDER_TIME else "Calculating..."
+                    expected_str = f"{expected:.2f}s" if expected != INITIAL_PRESET_PLACEHOLDER_TIME else "Calc..."
                     infoText = f"{elapsed_time:.2f}s / {expected_str}"
                     progress_ratio = normalize(elapsed_time, 0, expected, clamp=True) if expected > 0 else 0.0
                     show_progress_bar = True
                 elif status == 'Sent':
                     elapsed_time = time.time() - task_data['start_time']
                     expected = task_data['expected_time']
-                    expected_str = f"{expected:.2f}s" if expected != INITIAL_PRESET_PLACEHOLDER_TIME else "Calculating..."
+                    expected_str = f"{expected:.2f}s" if expected != INITIAL_PRESET_PLACEHOLDER_TIME else "Calc..."
                     infoText = f"SENT ({elapsed_time:.2f}s / {expected_str})"
                     progress_ratio = normalize(elapsed_time, 0, expected, clamp=True) if expected > 0 else 0.0
                     show_progress_bar = True
@@ -791,7 +779,6 @@ if __name__ == "__main__":
                 pygame.draw.circle(screenUI, Cols.light, (mx, my), 7, 2)
             screen.blit(screen2, (0, 0))
             screen.blit(screenUI, (0, 0))
-
             pygame.display.flip()
             clock.tick(fps)
             continue
@@ -818,11 +805,20 @@ if __name__ == "__main__":
             sys.exit()
         print("Main: TileHandler fully initialized. Starting game.")
 
-        player = Player(target_host_ip, target_host_port, None, (TH.screenWidth, TH.screenHeight), {'30': Alkhemikal30, '50': Alkhemikal50, '80': Alkhemikal80, '150': Alkhemikal150, '200': Alkhemikal200}, Cols)
+        player = Player(target_host_ip, target_host_port, None, (screen_width * GenerationInfo.mapSizeScalar, screen_height * GenerationInfo.mapSizeScalar), {'30': Alkhemikal30, '50': Alkhemikal50, '80': Alkhemikal80, '150': Alkhemikal150, '200': Alkhemikal200}, Cols)
 
         break
 
-    # --- Main Game Loop ---
+    screen2 = pygame.Surface((screen_width * GenerationInfo.mapSizeScalar, screen_height * GenerationInfo.mapSizeScalar)).convert_alpha()
+
+    scrollSpeed = 50
+    scroll = [0.0, 0.0]
+    targetScroll = [0.0, 0.0]
+    momentum = [0.0, 0.0]
+    moving = [0.0, 0.0]
+
+    bottomUIBarSize = 0.07 * screen_height
+
     debug = False
     mouseSize = 1
     click = False
@@ -830,7 +826,7 @@ if __name__ == "__main__":
     pygame.mouse.set_visible(False)
     while running:
         mx, my = pygame.mouse.get_pos()
-        screen.fill(Cols.oceanBlue)
+        screen.fill(Cols.dark)
         screen2.fill((0, 0, 0, 0))
         screenUI.fill((0, 0, 0, 0))
         dt = (time.time() - last_time) * fps
@@ -843,26 +839,56 @@ if __name__ == "__main__":
                 click = True
             if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                 click = False
-            if event.type == pygame.KEYDOWN: # Corrected this line
+            if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     running = False
                 if event.key == pygame.K_SPACE:
                     toggle = not toggle
+                if event.key == pygame.K_a:
+                    moving[0] += 1
                 if event.key == pygame.K_d:
+                    moving[0] -= 1
+                if event.key == pygame.K_w:
+                    moving[1] += 1
+                if event.key == pygame.K_s:
+                    moving[1] -= 1
+
+                if event.key == pygame.K_x:
                     debug = not debug
                 if event.key == pygame.K_m:
                     mouseSize = (mouseSize + 1) % 4
                 if event.key == pygame.K_c:
                     showClouds = not showClouds
+            if event.type == pygame.KEYUP:
+                if event.key == pygame.K_a:
+                    moving[0] -= 1
+                if event.key == pygame.K_d:
+                    moving[0] += 1
+                if event.key == pygame.K_w:
+                    moving[1] -= 1
+                if event.key == pygame.K_s:
+                    moving[1] += 1
 
-        tile_under_mouse = TH.getTileAtPosition(mx, my)
+        targetScroll[0] += scrollSpeed * moving[0]
+        targetScroll[1] += scrollSpeed * moving[1]
+        targetScroll[0] = min(max(targetScroll[0], -screen_width * (GenerationInfo.mapSizeScalar - 1)), 0)
+        targetScroll[1] = min(max(targetScroll[1], -screen_height * (GenerationInfo.mapSizeScalar - 1) - bottomUIBarSize), 0)
+        diffs = [targetScroll[0] - scroll[0], targetScroll[1] - scroll[1]]
+        for idx, diff in enumerate(diffs):
+            momentum[idx] += diff / 25
+            momentum[idx] *= 0.7
+            scroll[idx] += momentum[idx]
+            scroll[idx] = min(max(scroll[idx], [-screen_width * (GenerationInfo.mapSizeScalar - 1), -screen_height * (GenerationInfo.mapSizeScalar - 1) - bottomUIBarSize][idx]), 0)
+        adjustedMx, adjustedMy = [mx - scroll[0], my - scroll[1]]
+
+        tile_under_mouse = TH.getTileAtPosition(adjustedMx, adjustedMy)
         hovered_territory = None
         if tile_under_mouse and tile_under_mouse.territory_id != -1:
             potential_hovered_terr = TH.territories_by_id.get(tile_under_mouse.territory_id)
             if potential_hovered_terr and hasattr(potential_hovered_terr, 'polygon') and potential_hovered_terr.polygon:
                 from shapely.geometry import Point
 
-                if Point(mx, my).intersects(potential_hovered_terr.polygon):
+                if Point(adjustedMx, adjustedMy).intersects(potential_hovered_terr.polygon):
                     hovered_territory = potential_hovered_terr
 
         TH.draw(screen2, showArrows=False, showDebugOverlay=debug, showWaterLand=False, hovered_territory=hovered_territory, selected_territory=player.selectedTerritory)
@@ -873,7 +899,9 @@ if __name__ == "__main__":
             player.draw(TH.playersSurf, screenUI, False)
             screen2.blit(TH.playersSurf, (0, 0))
         if showClouds:
-            TH.drawClouds(screen2, mx, my, mouseSize, player)
+            TH.drawClouds(screen2, adjustedMx, adjustedMy, mouseSize, player, scroll, [screen_width, screen_height], player.visibleTerritoryIDs)
+
+        pygame.draw.line(screenUI, Cols.debugRed, (0, screen_height - bottomUIBarSize), (screen_width, screen_height - bottomUIBarSize), 2)
 
         if toggle:
             fps_text = f"{clock.get_fps():.1f}"
@@ -884,11 +912,11 @@ if __name__ == "__main__":
                 drawText(screenUI, Cols.light, Alkhemikal30, screen_width / 2, 30, f"your name is {username}", Cols.dark, 3, justify="middle", centeredVertically=True)
                 drawText(screenUI, Cols.debugRed, Alkhemikal30, 5, screen_height - 90, sel_terr_text, Cols.dark, 3, antiAliasing=False)
                 drawText(screenUI, Cols.debugRed, Alkhemikal30, 5, screen_height - 60, fps_text, Cols.dark, 3, antiAliasing=False)
-                drawText(screenUI, Cols.debugRed, Alkhemikal30, 5, screen_height - 30, "[spc] UI, [d] Debug, [m] Mouse Size, [c] Clouds", Cols.dark, 3, antiAliasing=False)
+                drawText(screenUI, Cols.debugRed, Alkhemikal30, 5, screen_height - 30, "[spc] UI, [x] Debug, [m] Mouse Size, [c] Clouds", Cols.dark, 3, antiAliasing=False)
             pygame.draw.circle(screenUI, Cols.dark, (mx + 2, my + 2), 7, 2)
             pygame.draw.circle(screenUI, Cols.light, (mx, my), 7, 2)
 
-        screen.blit(screen2, (0, 0))
+        screen.blit(screen2, (0, 0), pygame.Rect(-scroll[0], -scroll[1], screen_width - scroll[0], screen_height - scroll[1]))
         screen.blit(screenUI, (0, 0))
         pygame.display.flip()
         clock.tick(fps)

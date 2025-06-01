@@ -1,19 +1,42 @@
 CLOUD CHUNKING SYSTEM OVERVIEW
-What about using smaller chunks to roughly approximate the circular shape of the vision? Build a dictionary during generation that maps each chunk to neighboring chunks, marking the edges as ones that need to be searched. This way the central chunks don't need to be looped over. The transparency can be more abrupt to where tiles in "central chunks" are just always fully transparent and tiles in the outer ring of chunks have their opacity set by a distance calculation for some opacity smoothing. You can use quite a small chunk size and store multiple set "radii" so everything is precomputed. When the cloud cover function is called the distance just gets rounded up to the nearest stored radius. This way all references are precomputed and the only calculation required is a distance calculation for edge chunks.
-To clarify, the dictionary stores a mapping of each pair (chunk, radii) to a list of two lists. The first list contains the indexes of "internal chunks", ones who are close enough to the current chunk that all tiles in them are fully opaque. The second list contains all edge chunks that are close to the radius band, meaning their tiles need to be explicitly distance checked for opacity calculations. The dictionary only stores the indexes of the chunks, not the entire list of tiles.
-Dictionary lookups are constant time so using extremely small chunks (maybe only around 10 per chunk) is beneficial even if it means more pre-computation. This minimizes the number of tiles in the "edge chunks" band meaning less distance calculations each frame.
+What about using smaller chunks to roughly approximate the circular shape of the vision? Build a dictionary during generation
+that maps each chunk to neighboring chunks, marking the edges as ones that need to be searched. This way the central chunks don't
+need to be looped over. The transparency can be more abrupt to where tiles in "central chunks" are just always fully transparent
+and tiles in the outer ring of chunks have their opacity set by a distance calculation for some opacity smoothing. You can use
+quite a small chunk size and store multiple set "radii" so everything is precomputed. When the cloud cover function is called
+the distance just gets rounded up to the nearest stored radius. This way all references are precomputed and the only calculation
+required is a distance calculation for edge chunks.
+To clarify, the dictionary stores a mapping of each pair (chunk, radii) to a list of two lists. The first list contains the
+indexes of "internal chunks", ones who are close enough to the current chunk that all tiles in them are fully opaque. The
+second list contains all edge chunks that are close to the radius band, meaning their tiles need to be explicitly distance
+checked for opacity calculations. The dictionary only stores the indexes of the chunks, not the entire list of tiles.
+Dictionary lookups are constant time so using extremely small chunks (maybe only around 10 per chunk) is beneficial even if
+it means more pre-computation. This minimizes the number of tiles in the "edge chunks" band meaning less distance
+calculations each frame.
 Use a euclidean distance check using the chunk indexes. For example, (0, 0) is 2 chunks away from (2, 0).
-One speed up you can do for the pre-computation is in the order you search chunks. Start with the largest radii you are going to search (use this list to begin with (50, 100, 150, 200)) and search for the indexes of nearby chunks for each chunk. In the next loop (now using 150 as the radius) you only need to loop through the chunks already stored in the (currentChunk, radius=200) key since everything else is known to be farther away.
-Also, for every chunk after this you can just shift the indexes and remove indices that are outside the maximum dimensions of the chunk grid since the "pattern" nearby chunks will always be in is perfectly consistent.
+One speed up you can do for the pre-computation is in the order you search chunks. Start with the largest radii you are going
+to search (use this list to begin with (50, 100, 150, 200)) and search for the indexes of nearby chunks for each chunk.
+In the next loop (now using 150 as the radius) you only need to loop through the chunks already stored in
+the (currentChunk, radius=200) key since everything else is known to be farther away.
+Also, for every chunk after this you can just shift the indexes and remove indices that are outside the maximum dimensions
+of the chunk grid since the "pattern" nearby chunks will always be in is perfectly consistent.
 
 CLOUD CHUNKING SYSTEM RUNTIME OPTIMIZATION
 Ok, so there are many places to speed this process up.
-1) Every tile being reset every frame. This is unnecessary. Most tiles on the screen are either already opaque and staying fully opaque this new frame or already transparent and staying fully transparent. Add a boolean within each tile for whether or not its transparency is changing, and only draw the polygon if it's transparency has changed.
-2) You shouldn't be looping through every tile in the first place. Tile opacities should never get "reset". Only tiles within the given radius (so being set to fully transparent or partially transparent) should be getting accessed at all, since other tiles are by default not changing. Only internal and edge chunks should ever be accessed in each frame.
-3) Don't reset the cloudSurf every frame. Redrawn tiles don't "stack" or "add", so they will properly cover up the previous tile and its transparency with the new correct color.
-4) Ensure that the cloudSurf begins (in the draw2internal screen) as a fully drawn surface where every cloud is fully shown (all starting fully opaque).
-5) Clouds don't need fancy opacity storage and other checks. Simply find the new calculated opacity and set the tile's opacity to that value without any smoothing. Remove all extraneous smoothing variables that are no longer needed.
-Provide the entire updated code file with these changes implemented. Do not add excessive line by line comments. Do not use inline statements or semi-colons. Do not add excessive try-catches or checks for whether functions, libraries, and surfs exist.
+1) Every tile being reset every frame. This is unnecessary. Most tiles on the screen are either already opaque and staying
+fully opaque this new frame or already transparent and staying fully transparent. Add a boolean within each tile for whether
+or not its transparency is changing, and only draw the polygon if it's transparency has changed.
+2) You shouldn't be looping through every tile in the first place. Tile opacities should never get "reset". Only tiles within
+the given radius (so being set to fully transparent or partially transparent) should be getting accessed at all, since other
+tiles are by default not changing. Only internal and edge chunks should ever be accessed in each frame.
+3) Don't reset the cloudSurf every frame. Redrawn tiles don't "stack" or "add", so they will properly cover up the previous
+tile and its transparency with the new correct color.
+4) Ensure that the cloudSurf begins (in the draw2internal screen) as a fully drawn surface where every cloud is fully shown
+(all starting fully opaque).
+5) Clouds don't need fancy opacity storage and other checks. Simply find the new calculated opacity and set the tile's opacity
+to that value without any smoothing. Remove all extraneous smoothing variables that are no longer needed.
+Provide the entire updated code file with these changes implemented. Do not add excessive line by line comments. Do not use
+inline statements or semi-colons. Do not add excessive try-catches or checks for whether functions, libraries, and surfs exist.
 
 LOADING SCREEN MISSING TASKS (NO PROGRESS BAR)
 During the generation process while the user is on the loading screen, there is a period of a few seconds where the screen shows
@@ -28,3 +51,59 @@ Do NOT add excessive comments. NEVER use semicolons.
 
 I provided the times below (these are stored in the execution_times.csv file) for reference.
 ... <pasted timers> ...
+
+MAPPING TERRITORIES TO NEARBY CLOUDS IN CLOUD PRECOMP
+Pull a "territoryVisionRange" attribute from controlPanel.GenerationInfo and use it in the cloud precomp function to build
+a dictionary. This dictionary should map every territory (use their IDs) to a set of tuples containing (tile ID, tile
+cloud opacity) for all the tiles that are within the (territoryVisionRange * tile_size) distance from the nearest tile
+of the territory. You can do this efficiently by
+
+1) looping through every tile within the territory and adding them (since those are guaranteed to be within the vision range)
+2) looping through all of the territory's coastal tiles, searching nearby chunks, looping through all their tiles, and
+storing them if they are close enough.
+
+calculate the tiles' opacities using similar logic as the _calculate_fov_opacities_for_source function. This time since
+you don't need chunks and everything is done on a tile by tile basis, simply loop through all tiles in the set and use
+opacity=(d / reveal_radius_px) ** 0.9
+
+add a set in player that stores territory IDs that are visible to this player. initially this will be empty.
+
+write a function in tileHandler that can be used to update the clouds surface in the current frame given the player's
+current set of visible tiles. make sure this function is called within the drawClouds() function.
+
+DISTRIBUTED CHILD PROCESS DATA TRANSFERRING
+Right now the program takes a significant amount of time (5+ seconds) to load the tileHandler object from the child thread
+at the end of the game initialization. This causes the screen to freeze. Can you break up the process of sending the tileHandler
+object's data back to the main process into multiple tasks that are spread out throughout the loading process? Take into
+account which processes are completed at each step and what attributes they require, only sending sections of the tileHandler
+object that are not going to be altered in future tasks.
+
+You can implement this in two different ways. Either
+
+1) send things after (almost) every task, here you can just add it without adjusting the loading screen
+2) send things after every 2 or 3 similar tasks, here add an additional task (and store it's execution time) for each section
+of the uploading process
+
+The goal is to limit the screen from freezing as much as possible by distributing the data transfer over time, so the first
+option might be better.
+
+Provide updated code files with your changes. Only provide files that have been changed. Do not add excessive comments. Do
+not use inline statements. Do not use semicolons.
+
+Here's the execution times csv for reference to more clearly see the tasks (it may contain multiple runs, so there will be duplicates).
+
+... <pasted timers> ...
+
+CLOUD TILE-BASED PRECOMP AND STORAGE
+
+Every map has the same cloud tile configuration. Can you precompute the distance between every tile, sort them from lowest
+to highest for each tile, and store it in a file? This way the cloud precomp can simply be loading that object instead of
+having to precompute it every generation. This will also speed up runtime since instead of checking chunks and calculating
+distances it just loops through the list of tiles and their distances until it reaches one that's out of range and quits.
+Make sure to do this with tile indexes since object references are reset every generation. Tile indexes will always be
+the same. Title the file you store this in with parameter information like the grid size. This way if the generation
+parameters are changed it will either pull from the correct file (if already calculated in a previous run) or generate
+a new mapping and store that in addition to any existing files. Put all of these in cloudPrecomp folder.
+
+Provide updated code files with your changes. Only provide files that have been changed. Do not add excessive comments. Do
+not use inline statements. Do not use semicolons.
