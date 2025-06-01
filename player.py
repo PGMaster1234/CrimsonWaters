@@ -33,6 +33,7 @@ class Player:
         self.selectedTerritory = None
         self.selectedTerritoryResetTimer = 0
         self.clickedOnInvalidTerritory = False
+        self.visibleTerritoryIDs = set()
 
     def handleClick(self, click, dt, hovered_territory):
         if self.selectedTerritoryResetTimer > 0:
@@ -48,6 +49,8 @@ class Player:
             if self.selectedTerritory is None:
                 if self.selectedTerritoryResetTimer > 0:
                     self.selectedTerritory = territory
+                    if self.selectedTerritory:
+                        self.visibleTerritoryIDs.add(self.selectedTerritory.id)
                     self.selectedTerritoryResetTimer = -30
             elif territory != self.selectedTerritory:
                 if territory in self.selectedTerritory.shortestPathToReachableTerritories:
@@ -56,13 +59,16 @@ class Player:
                     s.beginVoyage(self.selectedTerritory.shortestPathToReachableTerritories[territory][3])
                     self.ships.append(s)
                     self.selectedTerritory = None
+                    self.visibleTerritoryIDs.clear()
                 else:
                     self.selectedTerritoryResetTimer = -30
                     self.clickedOnInvalidTerritory = True
                     self.selectedTerritory = None
+                    self.visibleTerritoryIDs.clear()
 
         if click and not clicked_on_a_territory:
             self.selectedTerritory = None
+            self.visibleTerritoryIDs.clear()
 
     def update(self, dt):
         for ship in self.ships:
