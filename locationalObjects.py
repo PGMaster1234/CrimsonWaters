@@ -210,7 +210,7 @@ class Harbor:
 
                     # skip this path, it's too long
                     pathLength[neighbor] = pathLength[currentWaterTile] + 1
-                    if pathLength[neighbor] > 20:
+                    if pathLength[neighbor] > 20 and (routes_found_count > 0):
                         continue
                     
                     heapq.heappush(frontier, (tentativeG, next(counter), neighbor))
