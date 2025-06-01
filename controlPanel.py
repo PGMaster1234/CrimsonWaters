@@ -2,9 +2,13 @@ class GenerationInfo:
     waterThreshold = 0.505
     mountainThreshold = 0.5125
 
-    tileSize = 6
+    tileSize = 10
 
     territorySize = 100
+
+    territoryVisionRange = 20
+
+    mapSizeScalar = 1.5
 
 
 class ResourceInfo:
@@ -19,11 +23,11 @@ class ResourceInfo:
 
     @staticmethod
     def getSpawnableTiles(resourceType, tiles):
-        spawnableTiles = {'wood': [t for t in tiles if t.isLand and not t.isMountain and not t.isCoast],
-                          'stone': [t for t in tiles if t.isLand and not t.isCoast],
-                          'iron': [t for t in tiles if t.isLand and t.isMountain and not t.isCoast],
-                          'pine': [t for t in tiles if t.isLand and not t.isMountain and not t.isCoast],
-                          'amber': [t for t in tiles if t.isLand and t.isMountain and not t.isCoast]}
+        spawnableTiles = {'wood': [t for t in tiles if t.isLand and not t.isMountain and not t.isCoast and (len(t.adjacent) == 6)],
+                          'stone': [t for t in tiles if t.isLand and not t.isCoast and (len(t.adjacent) == 6)],
+                          'iron': [t for t in tiles if t.isLand and t.isMountain and not t.isCoast and (len(t.adjacent) == 6)],
+                          'pine': [t for t in tiles if t.isLand and not t.isMountain and not t.isCoast and (len(t.adjacent) == 6)],
+                          'amber': [t for t in tiles if t.isLand and t.isMountain and not t.isCoast and (len(t.adjacent) == 6)]}
         return spawnableTiles[resourceType]
 
 
@@ -56,10 +60,10 @@ class Cols:
     mountainBlue = (83, 78, 90)
     darkMountainBlue = [42, 40, 52]
     light = [220, 216, 201]
-    dark = [18, 22, 27]
-    crimson = [94, 32, 32]
-    brightCrimson = [124, 47, 47]
-    cloudLight = [110, 125, 119]
-    cloudMedium = [64, 87, 93]
-    cloudDark = [25, 26, 43]
+    dark = [19, 21, 22]
+    crimson = [94, 32, 47]
+    brightCrimson = [124, 47, 54]
+    cloudLight = [176, 185, 205]
+    cloudMedium = [124, 134, 156]
+    cloudDark = [105, 116, 140]
     debugRed = [255, 96, 141]
