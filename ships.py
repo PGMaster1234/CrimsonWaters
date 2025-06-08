@@ -2,7 +2,7 @@ import pygame
 import math
 from calcs import ang, normalize_angle, distance, blitRotate
 from text import drawText
-
+import os # Added import for font loading in debug mode
 
 class Ship:
     # ships never regen
@@ -53,7 +53,8 @@ class Ship:
         self.path = path
         self.currentInd = 1
         self.pos = list(path[0])
-        self.rect = pygame.rect.Rect(self.pos[0] - self.size / 2, self.pos[1] - self.size / 2, self.size, self.size)
+        # Rect is still map-relative, just for internal bounds check
+        self.rect = pygame.Rect(self.pos[0] - self.size / 2, self.pos[1] - self.size / 2, self.size, self.size)
 
     def move(self, dt):
         if self.path is not None:
@@ -65,6 +66,7 @@ class Ship:
             self.pos[0] += math.cos(self.a) * self.currentMS * dt
             self.pos[1] += math.sin(self.a) * self.currentMS * dt
 
+            # Update map-relative rect position
             self.rect.x, self.rect.y = self.pos[0] - self.size / 2, self.pos[1] - self.size / 2
 
             if distance(self.pos, self.path[self.currentInd]) < 3 * self.startingTile.size:
@@ -74,22 +76,29 @@ class Ship:
                     if distance(self.pos, self.path[self.currentInd]) < self.startingTile.size:
                         self.path = None
 
-    def draw(self, s, debug=False):
-        blitRotate(pygame, s, self.img, self.rect.bottomright, -180 * self.a / math.pi - 90)
+    def draw(self, s, debug=False, scroll_x=0, scroll_y=0):
+        # blitRotate expects the center_pos in screen coordinates
+        blitRotate(pygame, s, self.img, (self.pos[0] + self.size / 2 + scroll_x, self.pos[1] + self.size / 2 + scroll_y), -180 * self.a / math.pi - 90)
 
         if debug and self.path is not None:
             angle = normalize_angle(ang(self.pos, self.path[self.currentInd]))
             debugRayLength = 50
-            pygame.draw.line(s, (0, 0, 255), self.pos, (self.pos[0] + debugRayLength * math.cos(angle), self.pos[1] + debugRayLength * math.sin(angle)), 3)
-            pygame.draw.line(s, (0, 0, 255), self.pos, (self.pos[0] + debugRayLength * math.cos(self.a), self.pos[1] + debugRayLength * math.sin(self.a)), 3)
-            pygame.draw.circle(s, (0, 0, 255), self.path[self.currentInd], 6)
+            # Draw debug lines/circles in screen coordinates
+            pygame.draw.line(s, (0, 0, 255), (self.pos[0] + scroll_x, self.pos[1] + scroll_y),
+                             (self.pos[0] + debugRayLength * math.cos(angle) + scroll_x, self.pos[1] + debugRayLength * math.sin(angle) + scroll_y), 3)
+            pygame.draw.line(s, (0, 0, 255), (self.pos[0] + scroll_x, self.pos[1] + scroll_y),
+                             (self.pos[0] + debugRayLength * math.cos(self.a) + scroll_x, self.pos[1] + debugRayLength * math.sin(self.a) + scroll_y), 3)
+            pygame.draw.circle(s, (0, 0, 255), (int(self.path[self.currentInd][0] + scroll_x), int(self.path[self.currentInd][1] + scroll_y)), 6)
 
+            # Draw text in screen coordinates
             from fontDict import fonts
-            font1Info = fonts["Alkhemikal20"]
-            font1 = pygame.font.Font(font1Info[0], font1Info[1])
-            drawText(s, (0, 0, 0), font1, self.pos[0] + 20, self.pos[1] + 20, str(round(-180 * self.a / math.pi - 90, 1)))
+            font_path, font_size = fonts["Alkhemikal20"]
+            font1 = pygame.font.Font(font_path, font_size) # Load font dynamically if needed, though main thread should have already
+            drawText(s, (0, 0, 0), font1, self.pos[0] + 20 + scroll_x, self.pos[1] + 20 + scroll_y, str(round(-180 * self.a / math.pi - 90, 1)))
 
-            pygame.draw.rect(s, (0, 0, 255), self.rect, 1, int(self.size / 3))
+            # Draw rect in screen coordinates
+            debug_rect_on_screen = pygame.Rect(self.rect.x + scroll_x, self.rect.y + scroll_y, self.rect.width, self.rect.height)
+            pygame.draw.rect(s, (0, 0, 255), debug_rect_on_screen, 1, int(self.size / 3))
 
 
 class TradeShip(Ship):

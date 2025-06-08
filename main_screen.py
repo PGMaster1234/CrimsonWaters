@@ -170,7 +170,7 @@ load_and_calculate_average_times()
 
 
 def build_tile_handler_worker(args_tuple):
-    width, height, gen_info, font_name_to_load, font_definitions_dict, cols_class, resource_info_class, structure_info_class, local_status_q, current_preset_times, worker_seed = args_tuple
+    map_width, map_height, viewport_width, viewport_height, gen_info, font_name_to_load, font_definitions_dict, cols_class, resource_info_class, structure_info_class, local_status_q, current_preset_times, worker_seed = args_tuple
 
     try:
         from generation import TileHandler
@@ -186,7 +186,7 @@ def build_tile_handler_worker(args_tuple):
             _font = pygame.font.Font(font_path, font_size)
         except Exception as e_font:
             print(f"Worker: Error loading font '{font_name_to_load}': {e_font}")
-    TH_instance = TileHandler(width, height, gen_info.tileSize, cols_class, gen_info.waterThreshold, gen_info.mountainThreshold, gen_info.territorySize, font=_font, font_name=font_name_to_load, resource_info=resource_info_class, structure_info=structure_info_class, status_queue=local_status_q, preset_times=current_preset_times, seed=worker_seed)
+    TH_instance = TileHandler(map_width, map_height, gen_info.tileSize, cols_class, gen_info.waterThreshold, gen_info.mountainThreshold, gen_info.territorySize, font=_font, font_name=font_name_to_load, resource_info=resource_info_class, structure_info=structure_info_class, status_queue=local_status_q, preset_times=current_preset_times, seed=worker_seed, viewport_width=viewport_width, viewport_height=viewport_height)
     TH_instance.prepare_for_pickling()
     return TH_instance
 
@@ -205,7 +205,8 @@ if __name__ == "__main__":
     fps = 60
     screen_width, screen_height = screen.get_width(), screen.get_height()
     screen_center = [screen_width / 2, screen_height / 2]
-    screen2 = pygame.Surface((screen_width, screen_height)).convert_alpha()
+
+    screen2_loading_background = pygame.Surface((screen_width, screen_height)).convert_alpha()
     screenUI = pygame.Surface((screen_width, screen_height)).convert_alpha()
 
     loaded_fonts = {}
@@ -278,26 +279,10 @@ if __name__ == "__main__":
     PHASE_RETRIEVING_MAP_DATA = "Retrieving World Data"
     PHASE_GFX_INIT = "Initializing Graphics"
 
-    # Restored to only include gfxTotalInit, as individual gfx steps are not reported externally
-    LOADING_STEPS_ORDER = ["tileGen", "linkAdj", "cloudPrecompParallel", "generationCycles", "setTileColors", "findLandRegionsParallel", "indexOceansParallel", "assignCoastTiles", "createTerritories", "connectHarborsParallel", "precomputeTerritoryVision", "workerInit", "dataSerialization", "retrieveMapData", "gfxTotalInit"]
+    LOADING_STEPS_ORDER = ["tileGen", "linkAdj", "generationCycles", "setTileColors", "cloudPrecompParallel", "findLandRegionsParallel", "indexOceansParallel", "assignCoastTiles", "createTerritories", "connectHarborsParallel", "precomputeTerritoryVision", "workerInit", "dataSerialization", "retrieveMapData", "gfxTotalInit"]
 
-    DISPLAY_NAMES_MAP = {
-        "tileGen": "Tile Generation",
-        "linkAdj": "Linking Adjacent Objects",
-        "cloudPrecompParallel": "Cloud Precomputation (Parallel)",
-        "generationCycles": "50 Generation Cycles",
-        "setTileColors": "Setting Tile Colors",
-        "findLandRegionsParallel": "Finding Land Regions (Parallel)",
-        "indexOceansParallel": "Indexing Oceans (Parallel)",
-        "assignCoastTiles": "Assigning Coast Tiles",
-        "createTerritories": "Creating Territories",
-        "connectHarborsParallel": "Connecting Harbors (Parallel)",
-        "precomputeTerritoryVision": "Precomputing Territory Vision",
-        "workerInit": "Worker Initialization",
-        "dataSerialization": "Data Serialization for Transfer",
-        "retrieveMapData": "Retrieving World Data",
-        "gfxTotalInit": "Graphics Initialization"
-    }
+    DISPLAY_NAMES_MAP = {"tileGen": "Generating Tiles", "linkAdj": "Connecting Adjacent Tiles", "cloudPrecompParallel": "Precomp Cloud Patterns (Parallel)", "generationCycles": "Simulating Biomes (50 cycles)", "setTileColors": "Coloring Map Tiles", "findLandRegionsParallel": "Identifying Landmasses (Parallel)", "indexOceansParallel": "Indexing Oceans (Parallel)", "assignCoastTiles": "Assigning Coastline Tiles", "createTerritories": "Forming Territories",
+        "connectHarborsParallel": "Connecting Harbors (Parallel)", "precomputeTerritoryVision": "Precomputing Territory Vision", "workerInit": "World Generation Complete (Worker)", "dataSerialization": "Serializing World Data", "retrieveMapData": "Retrieving World Data", "gfxTotalInit": "Initializing Game Graphics"}
 
     task_display_states = {}
     for step_name_key in LOADING_STEPS_ORDER:
@@ -319,8 +304,8 @@ if __name__ == "__main__":
     line_height = 30
     progress_bar_width = screen_width * 0.17
     progress_bar_height = 15
-    progress_bar_y_offset = 5
     progress_bar_corner_radius = int(progress_bar_height / 3)
+    progress_bar_y_offset = 5
 
     single_task_display_start_y = screen_center[1] - (len(LOADING_STEPS_ORDER) * line_height / 2)
 
@@ -328,10 +313,11 @@ if __name__ == "__main__":
     running = True
     pygame.mouse.set_visible(False)
 
-    screen2.blit(generationScreenBackgroundImg, (0, 0))
+    screen2_loading_background.blit(generationScreenBackgroundImg, (0, 0))
     overlay = pygame.Surface((screen_width, screen_height), pygame.SRCALPHA)
-    overlay.fill((0, 10, 10, 200))
-    screen2.blit(overlay, (0, 0))
+    overlay.fill((0, 8, 10, 150))
+    screen2_loading_background.blit(overlay, (0, 0))
+    screen.blit(screen2_loading_background, (0, 0))
 
     while running:
         screen.fill(Cols.dark)
@@ -436,7 +422,7 @@ if __name__ == "__main__":
                             userString = ""
                             userStringErrorDisplay = None
                             print(f"Main: Host starting game with seed {seed}")
-                        elif txt.lower() == 'quit':
+                        elif txt.lower() in ['quit', 'q']:
                             print("Host: Returning to INIT screen. Closing server.")
                             if server_socket:
                                 server_socket.close()
@@ -546,17 +532,17 @@ if __name__ == "__main__":
                 last_host_check_time = time.time()
 
             if mode == "INIT":
-                drawText(screenUI, Cols.brightCrimson, Alkhemikal200, main_title_x, screen_center[1] - 80, "Crimson", Cols.dark, shadowSize=5, justify="center", centeredVertically=True)
-                drawText(screenUI, Cols.brightCrimson, Alkhemikal200, main_title_x, screen_center[1] + 80, "Wakes", Cols.dark, shadowSize=5, justify="center", centeredVertically=True)
+                drawText(screenUI, Cols.crimson, Alkhemikal200, main_title_x, screen_center[1] - 80, "Crimson", Cols.dark, shadowSize=5, justify="center", centeredVertically=True)
+                drawText(screenUI, Cols.crimson, Alkhemikal200, main_title_x, screen_center[1] + 80, "Wakes", Cols.dark, shadowSize=5, justify="center", centeredVertically=True)
                 if lobby_timer_for_error_display < 0:
-                    userStringErrorDisplay = ("->  <-" if userString == "" else None)
+                    userStringErrorDisplay = (f"-> {'~' if int(lobby_timer_for_error_display / fps * 2) % 2 else '  '} <-" if userString == "" else None)
                 prompt = "type 'start' to host or enter a code to join"
                 drawText(screenUI, Cols.light, Alkhemikal50, screen_width * 0.75, screen_center[1] - 40, prompt, Cols.dark, 3, justify="middle", centeredVertically=True, maxLen=screen_width / 3, wrap=True)
                 drawText(screenUI, Cols.crimson if lobby_timer_for_error_display > 0 else Cols.light, Alkhemikal80 if userStringErrorDisplay else Alkhemikal200, screen_width * 0.75, screen_center[1] + 100, userString if userStringErrorDisplay is None else userStringErrorDisplay, Cols.dark, 3, justify="middle", centeredVertically=True)
 
             elif mode == "HOST_LOBBY":
                 drawText(screenUI, Cols.crimson, Alkhemikal150, screen_center[0], screen_center[1] - 260, "HOST LOBBY", Cols.dark, 3, justify="middle", centeredVertically=True)
-                drawText(screenUI, Cols.light, Alkhemikal30, screen_center[0], screen_center[1] - 160, f"Room code: {room_code}", Cols.dark, 3, justify="middle", centeredVertically=True)
+                drawText(screenUI, Cols.light, Alkhemikal80, screen_center[0], screen_center[1] - 160, f"Room code: {room_code}", Cols.dark, 3, justify="middle", centeredVertically=True)
                 drawText(screenUI, Cols.light, Alkhemikal20, screen_center[0], screen_center[1] - 100, f"Players joined:", Cols.dark, 3, justify="middle", centeredVertically=True)
 
                 current_players_list = list(players.values())
@@ -567,7 +553,7 @@ if __name__ == "__main__":
                 drawText(screenUI, Cols.light, Alkhemikal30, screen_center[0], screen_center[1] + 280, "type 'begin' to start or 'quit' to exit", Cols.dark, 3, justify="middle", centeredVertically=True)
 
                 if lobby_timer_for_error_display < 0:
-                    userStringErrorDisplay = ("->  <-" if userString == "" else None)
+                    userStringErrorDisplay = (f"-> {'~' if int(lobby_timer_for_error_display / fps * 2) % 2 else '  '} <-" if userString == "" else None)
                 drawText(screenUI, Cols.crimson if lobby_timer_for_error_display > 0 else Cols.light, Alkhemikal80 if userStringErrorDisplay else Alkhemikal200, screen_center[0], screen_center[1] + 180, userString if userStringErrorDisplay is None else userStringErrorDisplay, Cols.dark, 3, justify="middle", centeredVertically=True)
 
             elif mode == "CLIENT_LOBBY":
@@ -584,7 +570,8 @@ if __name__ == "__main__":
                 pygame.draw.circle(screenUI, Cols.dark, (mx + 2, my + 2), 7, 2)
                 pygame.draw.circle(screenUI, Cols.light, (mx, my), 7, 2)
 
-            screen.blit(screen2, (0, 0))
+            screen.blit(screen2_loading_background, (0, 0))
+            screen.blit(overlay, (0, 0))
             screen.blit(screenUI, (0, 0))
             pygame.display.flip()
             clock.tick(fps)
@@ -592,8 +579,9 @@ if __name__ == "__main__":
 
         if future is None:
             print(f"Main: Submitting TileHandler generation task to worker with seed: {seed}.")
-            # Pass scaled dimensions for TileHandler
-            worker_args = (screen_width * GenerationInfo.mapSizeScalar, screen_height * GenerationInfo.mapSizeScalar, GenerationInfo, font_name_needed_by_worker, fonts_definitions, Cols, ResourceInfo, StructureInfo, status_queue_for_main_thread, PRESET_EXECUTION_TIMES, seed)
+            map_gen_width = int(screen_width * GenerationInfo.mapSizeScalar)
+            map_gen_height = int(screen_height * GenerationInfo.mapSizeScalar)
+            worker_args = (map_gen_width, map_gen_height, screen_width, screen_height, GenerationInfo, font_name_needed_by_worker, fonts_definitions, Cols, ResourceInfo, StructureInfo, status_queue_for_main_thread, PRESET_EXECUTION_TIMES, seed)
             future = executor.submit(build_tile_handler_worker, worker_args)
             loading_screen_start_time = time.time()
 
@@ -624,23 +612,18 @@ if __name__ == "__main__":
                     if TH and hasattr(TH, 'execution_times'):
                         all_current_run_times.update(TH.execution_times)
 
-                    # After retrieval, initialize graphics on the main thread
+                    task_data_gfx_total = task_display_states["gfxTotalInit"]
+                    task_data_gfx_total['status'] = 'Starting'
+                    task_data_gfx_total['start_time'] = time.time()
+                    task_data_gfx_total['expected_time'] = PRESET_EXECUTION_TIMES.get("gfxTotalInit", INITIAL_PRESET_PLACEHOLDER_TIME)
+
                     if TH:
-                        # Report the start of the single combined graphics task
-                        task_data_gfx_total = task_display_states["gfxTotalInit"]
-                        task_data_gfx_total['status'] = 'Starting'
-                        task_data_gfx_total['start_time'] = time.time()
-                        task_data_gfx_total['expected_time'] = PRESET_EXECUTION_TIMES.get("gfxTotalInit", INITIAL_PRESET_PLACEHOLDER_TIME)
-
                         TH.initialize_graphics_and_external_libs(loaded_fonts, status_queue_for_main_thread, PRESET_EXECUTION_TIMES)
-
-                        # The gfxTotalInit task will report its own FINISHED status when done
-                        # The TH_fully_initialized flag will be set by processing that status from the queue
                     else:
                         task_data = task_display_states["retrieveMapData"]
                         task_data['status'] = 'Error'
                         task_data['duration'] = 0.0
-                        TH_fully_initialized = True # Mark as complete (with error)
+                        TH_fully_initialized = True
                         print("Main Error: TH is None after future.result().")
 
                 except Exception as e_future_result:
@@ -661,7 +644,6 @@ if __name__ == "__main__":
                     display_name_human_readable = DISPLAY_NAMES_MAP.get(step_name_key_from_worker, step_name_key_from_worker)
 
                     if step_name_key_from_worker not in task_display_states:
-                        # This should no longer print for individual gfx steps if generation.py is updated
                         print(f"Main: Received unknown task status key: '{step_name_key_from_worker}' (mapped to '{display_name_human_readable}'). Please check config.")
                         continue
 
@@ -678,31 +660,32 @@ if __name__ == "__main__":
                     elif status_type == "FINISHED":
                         current_task_data['status'] = 'Finished'
                         current_task_data['duration'] = time_value
-                        if step_name_key_from_worker == "gfxTotalInit": # This is the only step that will set this
+                        if step_name_key_from_worker == "gfxTotalInit":
                             TH_fully_initialized = True
                     elif status_type == "ERROR":
                         current_task_data['status'] = 'Error'
                         current_task_data['duration'] = 0.0
                         print(f"Main (Error from queue): Task '{display_name_human_readable}' failed - Details: {time_value}")
-                        TH_fully_initialized = True # Mark as complete (with error)
+                        TH_fully_initialized = True
             except (multiprocessing.queues.Empty, EOFError):
                 pass
             except Exception as e_queue:
                 print(f"Main: Error processing status queue: {e_queue}")
                 TH_fully_initialized = True
 
-            drawText(screenUI, Cols.brightCrimson, Alkhemikal200, main_title_x, screen_center[1] - 150, "Crimson", Cols.dark, shadowSize=5, justify="center", centeredVertically=True)
-            drawText(screenUI, Cols.brightCrimson, Alkhemikal200, main_title_x, screen_center[1] - 10, "Wakes", Cols.dark, shadowSize=5, justify="center", centeredVertically=True)
+            screen.blit(screen2_loading_background, (0, 0))
+            screen.blit(overlay, (0, 0))
 
-            # Corrected logic for current_overall_phase: Check latest phases first
-            current_overall_phase = PHASE_WORKER_INIT # Default/Initial phase
+            drawText(screenUI, Cols.crimson, Alkhemikal200, main_title_x, screen_center[1] - 150, "Crimson", Cols.dark, shadowSize=5, justify="center", centeredVertically=True)
+            drawText(screenUI, Cols.crimson, Alkhemikal200, main_title_x, screen_center[1] - 10, "Wakes", Cols.dark, shadowSize=5, justify="center", centeredVertically=True)
+
+            current_overall_phase = PHASE_WORKER_INIT
             if task_display_states["gfxTotalInit"]['status'] in ['Starting', 'Sent', 'Finished', 'Error']:
                 current_overall_phase = PHASE_GFX_INIT
             elif task_display_states["retrieveMapData"]['status'] in ['Starting', 'Sent', 'Finished', 'Error']:
                 current_overall_phase = PHASE_RETRIEVING_MAP_DATA
             elif task_display_states["dataSerialization"]['status'] in ['Starting', 'Sent', 'Finished', 'Error']:
                 current_overall_phase = PHASE_DATA_TRANSFER_PREP
-            # No `elif` for `workerInit` needed, as it's the default if earlier phases haven't started.
 
             top_loading_text = current_overall_phase + ("." * int(numPeriods))
             if TH_fully_initialized and TH:
@@ -719,7 +702,7 @@ if __name__ == "__main__":
                 task_y_pos = single_task_display_start_y + y_pos_offset
 
                 display_name_human_readable = DISPLAY_NAMES_MAP.get(task_name_key, task_name_key)
-                if display_name_human_readable == "Worker Initialization": # This is an overall phase, not a granular task to list
+                if display_name_human_readable == "World Generation Complete (Worker)":
                     continue
 
                 infoText = ""
@@ -747,7 +730,7 @@ if __name__ == "__main__":
                     progress_ratio = 1.0
                     show_progress_bar = True
                 elif status == 'Error':
-                    infoText = f"Error!"
+                    infoText = "Error!"
                     progress_ratio = 0.0
                     show_progress_bar = False
 
@@ -775,9 +758,10 @@ if __name__ == "__main__":
                 y_pos_offset += line_height
 
             if toggle:
+                string_fps = f"FPS: {round(clock.get_fps())}"
+                drawText(screenUI, Cols.crimson, Alkhemikal30, 5, screen_height - 30, string_fps, Cols.dark, 3, antiAliasing=False)
                 pygame.draw.circle(screenUI, Cols.dark, (mx + 2, my + 2), 7, 2)
                 pygame.draw.circle(screenUI, Cols.light, (mx, my), 7, 2)
-            screen.blit(screen2, (0, 0))
             screen.blit(screenUI, (0, 0))
             pygame.display.flip()
             clock.tick(fps)
@@ -799,17 +783,15 @@ if __name__ == "__main__":
             print("Error: TileHandler failed to initialize. Exiting.")
             pygame.quit()
             sys.exit()
-        if TH.playersSurf is None:
-            print("CRITICAL MAIN ERROR: TH.playersSurf is None post-init. Exiting.")
+        if TH.playersSurfScreen is None:
+            print("CRITICAL MAIN ERROR: TH.playersSurfScreen is None post-init. Exiting.")
             pygame.quit()
             sys.exit()
         print("Main: TileHandler fully initialized. Starting game.")
 
-        player = Player(target_host_ip, target_host_port, None, (screen_width * GenerationInfo.mapSizeScalar, screen_height * GenerationInfo.mapSizeScalar), {'30': Alkhemikal30, '50': Alkhemikal50, '80': Alkhemikal80, '150': Alkhemikal150, '200': Alkhemikal200}, Cols)
+        player = Player(target_host_ip, target_host_port, None, (screen_width, screen_height), {'30': Alkhemikal30, '50': Alkhemikal50, '80': Alkhemikal80, '150': Alkhemikal150, '200': Alkhemikal200}, Cols)
 
         break
-
-    screen2 = pygame.Surface((screen_width * GenerationInfo.mapSizeScalar, screen_height * GenerationInfo.mapSizeScalar)).convert_alpha()
 
     scrollSpeed = 50
     scroll = [0.0, 0.0]
@@ -817,17 +799,26 @@ if __name__ == "__main__":
     momentum = [0.0, 0.0]
     moving = [0.0, 0.0]
 
-    bottomUIBarSize = 0.07 * screen_height
+    from controlPanel import uiInfo
+
+    bottomUIBarSize = uiInfo.bottomUIBarSize * screen_height
+
+    max_scroll_x = 0
+    min_scroll_x = -(TH.mapWidth - screen_width)
+    max_scroll_y = 0
+    min_scroll_y = -(TH.mapHeight - screen_height)
 
     debug = False
     mouseSize = 1
     click = False
     showClouds = True
     pygame.mouse.set_visible(False)
+
+    game_screen_surface = pygame.Surface((screen_width, screen_height)).convert_alpha()
+
     while running:
         mx, my = pygame.mouse.get_pos()
-        screen.fill(Cols.dark)
-        screen2.fill((0, 0, 0, 0))
+        game_screen_surface.fill(Cols.dark)
         screenUI.fill((0, 0, 0, 0))
         dt = (time.time() - last_time) * fps
         last_time = time.time()
@@ -871,14 +862,15 @@ if __name__ == "__main__":
 
         targetScroll[0] += scrollSpeed * moving[0]
         targetScroll[1] += scrollSpeed * moving[1]
-        targetScroll[0] = min(max(targetScroll[0], -screen_width * (GenerationInfo.mapSizeScalar - 1)), 0)
-        targetScroll[1] = min(max(targetScroll[1], -screen_height * (GenerationInfo.mapSizeScalar - 1) - bottomUIBarSize), 0)
+        targetScroll[0] = min(max(targetScroll[0], min_scroll_x), max_scroll_x)
+        targetScroll[1] = min(max(targetScroll[1], min_scroll_y), max_scroll_y)
+
         diffs = [targetScroll[0] - scroll[0], targetScroll[1] - scroll[1]]
         for idx, diff in enumerate(diffs):
             momentum[idx] += diff / 25
             momentum[idx] *= 0.7
             scroll[idx] += momentum[idx]
-            scroll[idx] = min(max(scroll[idx], [-screen_width * (GenerationInfo.mapSizeScalar - 1), -screen_height * (GenerationInfo.mapSizeScalar - 1) - bottomUIBarSize][idx]), 0)
+            scroll[idx] = min(max(scroll[idx], [min_scroll_x, min_scroll_y][idx]), [max_scroll_x, max_scroll_y][idx])
         adjustedMx, adjustedMy = [mx - scroll[0], my - scroll[1]]
 
         tile_under_mouse = TH.getTileAtPosition(adjustedMx, adjustedMy)
@@ -891,15 +883,25 @@ if __name__ == "__main__":
                 if Point(adjustedMx, adjustedMy).intersects(potential_hovered_terr.polygon):
                     hovered_territory = potential_hovered_terr
 
-        TH.draw(screen2, showArrows=False, showDebugOverlay=debug, showWaterLand=False, hovered_territory=hovered_territory, selected_territory=player.selectedTerritory)
-
         player.handleClick(click, dt, hovered_territory)
         player.update(dt)
-        if TH.playersSurf:
-            player.draw(TH.playersSurf, screenUI, False)
-            screen2.blit(TH.playersSurf, (0, 0))
-        if showClouds:
-            TH.drawClouds(screen2, adjustedMx, adjustedMy, mouseSize, player, scroll, [screen_width, screen_height], player.visibleTerritoryIDs)
+
+        visible_map_rect_on_full_map = pygame.Rect(-scroll[0], -scroll[1], screen_width, screen_height)
+
+        if TH.baseMapSurf:
+            game_screen_surface.blit(TH.baseMapSurf.subsurface(visible_map_rect_on_full_map), (0, 0))
+
+        if debug and TH.debugOverlayFullMap:
+            game_screen_surface.blit(TH.debugOverlayFullMap.subsurface(visible_map_rect_on_full_map), (0, 0))
+
+        TH.drawTerritoryHighlights(game_screen_surface, hovered_territory, player.selectedTerritory, scroll)
+
+        TH.playersSurfScreen.fill((0, 0, 0, 0))
+        if TH.playersSurfScreen:
+            player.draw(TH.playersSurfScreen, screenUI, False, scroll)
+            game_screen_surface.blit(TH.playersSurfScreen, (0, 0))
+        if showClouds and TH.cloudSurfFullMap:
+            TH.drawClouds(game_screen_surface, adjustedMx, adjustedMy, mouseSize, player, scroll, [screen_width, screen_height], player.visibleTerritoryIDs)
 
         pygame.draw.line(screenUI, Cols.debugRed, (0, screen_height - bottomUIBarSize), (screen_width, screen_height - bottomUIBarSize), 2)
 
@@ -916,7 +918,7 @@ if __name__ == "__main__":
             pygame.draw.circle(screenUI, Cols.dark, (mx + 2, my + 2), 7, 2)
             pygame.draw.circle(screenUI, Cols.light, (mx, my), 7, 2)
 
-        screen.blit(screen2, (0, 0), pygame.Rect(-scroll[0], -scroll[1], screen_width - scroll[0], screen_height - scroll[1]))
+        screen.blit(game_screen_surface, (0, 0))
         screen.blit(screenUI, (0, 0))
         pygame.display.flip()
         clock.tick(fps)

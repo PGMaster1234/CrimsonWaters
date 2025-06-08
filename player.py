@@ -18,10 +18,11 @@ class Player:
         self.ip = ip
         self.runtimePort = runtimePort
         self.territory = territory
-        self.screenDims = screenDims
+        self.screenDims = screenDims # Actual screen dimensions now
         self.fonts = fonts
         self.cols = cols
 
+        # This surface is screen-sized, used for drawing player-specific dynamic elements
         self.surf = pygame.Surface(self.screenDims).convert_alpha()
 
         self.ships = []
@@ -74,12 +75,17 @@ class Player:
         for ship in self.ships:
             ship.move(dt)
 
-    def draw(self, s, screenUI, debug):
-        self.surf.fill((0, 0, 0, 0))
+    def draw(self, s, screenUI, debug, scroll=(0, 0)): # s is now the screen-sized surface to draw on
+        self.surf.fill((0, 0, 0, 0)) # Clear player surface for this frame
+
+        scroll_x, scroll_y = scroll[0], scroll[1]
+
         for ship in self.ships:
-            ship.draw(self.surf, debug)
+            # Pass the screen-sized surface and scroll offsets to ship.draw
+            ship.draw(self.surf, debug, scroll_x, scroll_y)
+
         if self.clickedOnInvalidTerritory:
             shakeStrength = 2
             shake = (random.randint(-shakeStrength, shakeStrength), random.randint(-shakeStrength, shakeStrength))
             drawText(screenUI, self.cols.crimson, self.fonts['150'], self.screenDims[0] / 2 + shake[0], self.screenDims[1] / 2 + shake[1], "INVALID ORDER", self.cols.dark, 3, antiAliasing=False, justify='center', centeredVertically=True)
-        s.blit(self.surf, (0, 0))
+        s.blit(self.surf, (0, 0)) # Blit the screen-sized player surface to the main screen

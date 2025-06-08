@@ -27,8 +27,9 @@ class Resource:
             self.img = pygame.transform.scale(pygame.image.load(filename).convert_alpha(), [self.tile.size * imgScalar] * 2)
             self.imgDims = self.img.get_width(), self.img.get_height()
 
-    def draw(self, s):
-        s.blit(self.img, (self.tile.x - self.imgDims[0] / 2, self.tile.y - self.imgDims[1] / 2))
+    def draw(self, s, scroll_x, scroll_y): # scroll_x, scroll_y are added but expected to be 0 for static map elements
+        if self.img and self.imgDims:
+            s.blit(self.img, (self.tile.x - self.imgDims[0] / 2, self.tile.y - self.imgDims[1] / 2))
 
 
 class LightHouse: pass
@@ -40,13 +41,11 @@ class DefensePost: pass
 class Harbor:
     def __init__(self, tile, isUsable=False):
         self.parentTerritory = None
-        self.tile = tile  # Direct reference to the tile it sits on
-        self.harbor_id = -1  # Assigned by TileHandler
-        # --- Data stored using IDs for pickling ---
-        self.tradeRoutesData = {}  # {target_harbor_id: List[tile_id]}
-        self.tradeRoutesPoints = {}  # {target_harbor_id: List[xi, yi]}
-        # --- Data reconstructed after pickling ---
-        self.tradeRouteObjects = {}  # {target_Harbor_object: List[Hex_object]}
+        self.tile = tile
+        self.harbor_id = -1
+        self.tradeRoutesData = {}
+        self.tradeRoutesPoints = {}
+        self.tradeRouteObjects = {}
         self.isUsable = isUsable
 
         self.prunedPathPoints = []
@@ -55,13 +54,10 @@ class Harbor:
         self.parentTerritory = parentTerritory
 
     def prepare_for_pickling(self):
-        """Ensure only ID-based data is kept for pickling."""
-        # Nullify the object-based route dictionary
-        self.tradeRouteObjects = {}  # self.tile reference is kept, assuming Hex pickling is handled
+        self.tradeRouteObjects = {}
 
     def initialize_graphics_and_external_libs(self, tiles_by_id_map, harbors_by_id_map):
-        """Reconstructs the tradeRouteObjects map from tradeRoutesData using IDs."""
-        self.tradeRouteObjects = {}  # Clear existing (should be empty anyway)
+        self.tradeRouteObjects = {}
         for target_hid, path_tile_ids in self.tradeRoutesData.items():
             target_harbor = harbors_by_id_map.get(target_hid)
             if target_harbor:
@@ -76,11 +72,10 @@ class Harbor:
                     else:
                         print(f"Warning: Tile ID {tile_id} not found during route reconstruction for Harbor {self.harbor_id}.")
                         valid_path = False
-                        break  # Stop reconstructing this path
+                        break
                 if valid_path:
                     self.tradeRouteObjects[target_harbor] = path_objects
 
-                    # prune path for redundant points
                     popping = []
                     self.prunedPathPoints = []
                     for i in range(len(points)):
@@ -93,11 +88,7 @@ class Harbor:
                         points.pop(pop)
                     self.tradeRoutesPoints[target_harbor] = catmullRomCentripetal([self.tile.center] + points + [target_harbor.tile.center], 20)[0::2]
 
-    def generateAllRoutes(self, other_harbors_in_ocean, waterTilesInOcean):
-        """
-        Finds the shortest paths to other harbors using IDs. Stores results in self.tradeRoutesData
-        and targetHarbor.tradeRoutesData. Returns the number of PAIRS connected.
-        """
+    def generateAllRoutes(self, other_harbors_in_ocean, waterTilesInOcean, ocean_harbors_by_id_map):
         routes_found_count = 0
         if not other_harbors_in_ocean: return 0
 
@@ -107,23 +98,21 @@ class Harbor:
         startWaterNeighborTiles = {w for w in self.tile.adjacent if w in waterTilesInOcean}
         if not startWaterNeighborTiles: return 0
 
-        # Map water tiles adjacent to targets back to the target harbor object ID
-        targetWaterMap = {}  # {water_tile_object: target_harbor_id}
+        targetWaterMap = {}
         targetHarborIdSet = set()
         for h in other_harbors_in_ocean:
-            if h == self or h.harbor_id == -1: continue  # Skip self or unassigned IDs
+            if h == self or h.harbor_id == -1: continue
             isTarget = False
             for w in h.tile.adjacent:
                 if w in waterTilesInOcean:
-                    targetWaterMap[w] = h.harbor_id  # Map water tile to target ID
+                    targetWaterMap[w] = h.harbor_id
                     isTarget = True
             if isTarget: targetHarborIdSet.add(h.harbor_id)
 
         if not targetHarborIdSet: return 0
 
-        # Dijkstra Initialization (operates on tile objects internally for convenience)
         frontier = []
-        cameFrom = {}  # {tile_object: predecessor_tile_object}
+        cameFrom = {}
         gScore = {w: float('inf') for w in waterTilesInOcean}
 
         for startNeighbor in startWaterNeighborTiles:
@@ -141,10 +130,8 @@ class Harbor:
 
             if gCurr > gScore.get(currentWaterTile, float('inf')): continue
 
-            # Check if this water tile is adjacent to one of our remaining targets
             targetHarborId = targetWaterMap.get(currentWaterTile)
             if targetHarborId is not None and targetHarborId in targets_remaining:
-                # Reconstruct path (list of tile objects)
                 path_objects = []
                 temp = currentWaterTile
                 possible = True
@@ -159,31 +146,24 @@ class Harbor:
 
                 if possible and path_objects is not None:
                     final_path_objects = path_objects[::-1]
-                    # Convert path objects to path IDs
                     final_path_ids = [t.tile_id for t in final_path_objects if hasattr(t, 'tile_id')]
 
-                    if len(final_path_ids) == len(final_path_objects):  # Ensure all tiles had IDs
-                        # Store path IDs in BOTH directions using IDs
+                    if len(final_path_ids) == len(final_path_objects):
                         self.tradeRoutesData[targetHarborId] = final_path_ids
 
-                        # Find the target harbor object to store the reverse path
-                        target_harbor_object = None
-                        for h in other_harbors_in_ocean:  # Inefficient lookup, better if map passed
-                            if h.harbor_id == targetHarborId:
-                                target_harbor_object = h
-                                break
+                        target_harbor_object = ocean_harbors_by_id_map.get(targetHarborId)
                         if target_harbor_object:
                             if not hasattr(target_harbor_object, 'tradeRoutesData'):
                                 target_harbor_object.tradeRoutesData = {}
-                            target_harbor_object.tradeRoutesData[self.harbor_id] = final_path_ids[::-1]  # Store reversed IDs
-                            routes_found_count += 1  # Increment pair count  # else: print(f"Warning: Could not find target harbor object for ID {targetHarborId} to store reverse path.")  # else: print(f"Warning: Could not get IDs for all tiles in path for harbor {self.harbor_id} -> {targetHarborId}")
+                            target_harbor_object.tradeRoutesData[self.harbor_id] = final_path_ids[::-1]
+                            routes_found_count += 1
 
                 targets_remaining.remove(targetHarborId)
                 if not targets_remaining: break
 
-            # Explore Neighbors (using tile objects)
             prevTile = cameFrom.get(currentWaterTile)
             if prevTile is None: continue
+
             currentCenterNp = np.array(currentWaterTile.center)
             prevCenterNp = np.array(prevTile.center)
 
@@ -208,30 +188,38 @@ class Harbor:
                     cameFrom[neighbor] = currentWaterTile
                     gScore[neighbor] = tentativeG
 
-                    # skip this path, it's too long
                     pathLength[neighbor] = pathLength[currentWaterTile] + 1
                     if pathLength[neighbor] > 20 and (routes_found_count > 0):
                         continue
-                    
+
                     heapq.heappush(frontier, (tentativeG, next(counter), neighbor))
 
         return routes_found_count
 
-    def draw(self, s):
-        pygame.draw.polygon(s, ((200, 30, 30) if self.isUsable else (100, 10, 10)), self.tile.hex)
+    def draw(self, s, scroll_x, scroll_y): # scroll_x, scroll_y are added but expected to be 0 for static map elements
+        shifted_hex = [(p[0] + scroll_x, p[1] + scroll_y) for p in self.tile.hex]
+        pygame.draw.polygon(s, ((200, 30, 30) if self.isUsable else (100, 10, 10)), shifted_hex)
 
-    def drawRoute(self, s, otherHarbor, color=(94, 32, 32), debug=False):
-        pathObjects = self.tradeRouteObjects[otherHarbor]
-        if pathObjects and len(pathObjects) >= 1:
-            points = self.tradeRoutesPoints[otherHarbor]
-            draw_color = tuple(color) if len(color) == 4 and (s.get_flags() & pygame.SRCALPHA) else tuple(color[:3])
-            if len(points) > 1:
-                pygame.draw.lines(s, draw_color, False, points, 3)
-            if debug:
-                if len(points) > 1:
-                    for p in points:
-                        pygame.draw.circle(s, (0, 0, 255), p, 3)
-                    pygame.draw.lines(s, (0, 0, 255), False, points, 2)
-                if len(self.prunedPathPoints) > 1:
-                    for p in self.prunedPathPoints:
-                        pygame.draw.circle(s, (0, 255, 0), p, 4)
+    def drawRoute(self, s, otherHarbor, color=(94, 32, 32), debug=False, scroll_x=0, scroll_y=0):
+        if otherHarbor not in self.tradeRouteObjects or not self.tradeRouteObjects[otherHarbor]:
+            return
+
+        points = self.tradeRoutesPoints.get(otherHarbor)
+        if points is None:
+            return
+
+        draw_color = tuple(color) if len(color) == 4 and (s.get_flags() & pygame.SRCALPHA) else tuple(color[:3])
+
+        shifted_points = [(p[0] + scroll_x, p[1] + scroll_y) for p in points]
+
+        if len(shifted_points) > 1:
+            pygame.draw.lines(s, draw_color, False, shifted_points, 3)
+        if debug:
+            if len(shifted_points) > 1:
+                for p in shifted_points:
+                    pygame.draw.circle(s, (0, 0, 255), p, 3)
+                pygame.draw.lines(s, (0, 0, 255), False, shifted_points, 2)
+            if len(self.prunedPathPoints) > 1:
+                shifted_pruned_points = [(p[0] + scroll_x, p[1] + scroll_y) for p in self.prunedPathPoints]
+                for p in shifted_pruned_points:
+                    pygame.draw.circle(s, (0, 255, 0), p, 4)

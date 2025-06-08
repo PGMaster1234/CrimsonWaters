@@ -18,6 +18,8 @@ from locationalObjects import Resource, Harbor
 
 class Territory:
     def __init__(self, screenWidth, screenHeight, centerPos, tiles, allWaterTiles, cols, resource_info=None, structure_info=None):
+        self.debugOverlayFullMap = None
+        self.baseMapSurf = None
         self.screenWidth = screenWidth
         self.screenHeight = screenHeight
         self.centerPos = centerPos
@@ -41,8 +43,6 @@ class Territory:
         self.claimed = None
         self.id = -1
         self.coastlines = []
-        self.surf = None
-        self.debugSurf = None
 
         self.polygon = None
         self.exteriors = []
@@ -62,14 +62,13 @@ class Territory:
             harbor.assignHarborParentReference(self)
 
     def prepare_for_pickling(self):
-        self.surf = None
-        self.debugSurf = None
         self.polygon = None
         self.reachableHarbors = {}
 
-    def initialize_graphics_and_external_libs(self, tiles_by_id_map, harbors_by_id_map):
-        self.surf = None
-        self.debugSurf = None
+    def initialize_graphics_and_external_libs(self, tiles_by_id_map, harbors_by_id_map, baseMapSurf_ref, debugOverlayFullMap_ref):
+        # These are references to the full-map surfaces where static elements are drawn ONCE
+        self.baseMapSurf = baseMapSurf_ref
+        self.debugOverlayFullMap = debugOverlayFullMap_ref
 
         if SHAPELY_AVAILABLE:
             if self.tiles:
@@ -163,15 +162,12 @@ class Territory:
         possibleTiles = [t for t in self.coastTiles if not t.isMountain]
         if not possibleTiles: return
 
-        spawnRate = getattr(info, 'harborSpawnRate', 0.01)
+        spawnRate = getattr(info, 'harborSpawnRate', 0.02)
         num_potential_harbors = math.ceil(len(possibleTiles) * spawnRate * 2)
-        num_potential_harbors = min(num_potential_harbors, len(possibleTiles))
-        num_potential_harbors = max(1, num_potential_harbors) if possibleTiles else 0
 
         if not possibleTiles or num_potential_harbors == 0: return
 
-        k_harbors = min(len(possibleTiles), num_potential_harbors)
-        selected_harbor_tiles = random.sample(possibleTiles, k_harbors)
+        selected_harbor_tiles = random.sample(possibleTiles, num_potential_harbors)
 
         for tile in selected_harbor_tiles:
             is_active_harbor = random.random() < 0.7
@@ -221,24 +217,28 @@ class Territory:
 
     def drawInternalStructures(self, target_surf):
         for resource in self.containedResources:
-            resource.draw(target_surf)
+            resource.draw(target_surf, 0, 0)
         for harbor in self.harbors:
-            harbor.draw(target_surf)
+            harbor.draw(target_surf, 0, 0)
 
-    def drawCurrent(self, s, colorCode):
+    def drawCurrent(self, s, colorCode, scroll_x, scroll_y):
+        # Draws dynamic highlights to a screen-sized surface (s) with scroll offsets
         tempCol = {'r': self.territoryCol, 'b': self.selectedTerritoryCol}
         fill_color = setOpacity(tempCol[colorCode], 60)
         line_color = setOpacity(tempCol[colorCode], 200)
         width = 4
 
         for border in self.exteriors:
-            if len(border) > 2: pygame.draw.polygon(s, fill_color, border)
-            if len(border) > 1: pygame.draw.lines(s, line_color, True, border, width=width)
+            shifted_border = [(p[0] + scroll_x, p[1] + scroll_y) for p in border]
+            if len(border) > 2: pygame.draw.polygon(s, fill_color, shifted_border)
+            if len(border) > 1: pygame.draw.lines(s, line_color, True, shifted_border, width=width)
         for border in self.interiors:
-            if len(border) > 1: pygame.draw.lines(s, line_color, True, border, width=width)
+            shifted_border = [(p[0] + scroll_x, p[1] + scroll_y) for p in border]
+            if len(border) > 1: pygame.draw.lines(s, line_color, True, shifted_border, width=width)
 
-    def drawRoutes(self, s, color):
+    def drawRoutes(self, s, color, scroll_x, scroll_y):
+        # Draws dynamic routes to a screen-sized surface (s) with scroll offsets
         for src_harbor, reachable_target_harbors in self.reachableHarbors.items():
             for target_harbor in reachable_target_harbors:
                 if hasattr(src_harbor, 'drawRoute'):
-                    src_harbor.drawRoute(s, target_harbor, color, False)
+                    src_harbor.drawRoute(s, target_harbor, color, False, scroll_x, scroll_y)

@@ -2,7 +2,7 @@ class GenerationInfo:
     waterThreshold = 0.505
     mountainThreshold = 0.5125
 
-    tileSize = 10
+    tileSize = 8
 
     territorySize = 100
 
@@ -48,6 +48,10 @@ class ShipInfo:
     shipSizes = {'fluyt': 35, 'carrack': 40, 'cutter': 30, 'corsair': 35, 'longShip': 35, 'galleon': 50}
 
 
+class uiInfo:
+    bottomUIBarSize = 0.07
+
+
 class Cols:
     oceanBlue = [59, 95, 111]
     oceanGreen = [73, 120, 122]
@@ -62,7 +66,7 @@ class Cols:
     light = [220, 216, 201]
     dark = [19, 21, 22]
     crimson = [94, 32, 47]
-    brightCrimson = [124, 47, 54]
+    brightCrimson = [85, 42, 56]
     cloudLight = [176, 185, 205]
     cloudMedium = [124, 134, 156]
     cloudDark = [105, 116, 140]
